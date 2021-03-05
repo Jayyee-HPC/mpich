@@ -531,54 +531,30 @@ static int network_split_by_torus_dimension(MPIR_Comm * comm_ptr, int key,
 
 static int compare_info_hint(const char *hintval, MPIR_Comm * comm_ptr, int *info_args_are_equal)
 {
+    int is_equal;
     int hintval_size = strlen(hintval);
-    int hintval_size_max;
-    int hintval_equal;
-    int hintval_equal_global = 0;
-    char *hintval_global = NULL;
     int mpi_errno = MPI_SUCCESS;
     MPIR_Errflag_t errflag = MPIR_ERR_NONE;
 
-    /* Find the maximum hintval size.  Each process locally compares
-     * its hintval size to the global max, and makes sure that this
-     * comparison is successful on all processes. */
-    mpi_errno =
-        MPID_Allreduce(&hintval_size, &hintval_size_max, 1, MPI_INT, MPI_MAX, comm_ptr, &errflag);
+    mpi_errno = MPIR_Allreduce_equal(&hintval_size, 1, MPI_INT, &is_equal, comm_ptr, &errflag);
+
     MPIR_ERR_CHECK(mpi_errno);
 
-    hintval_equal = (hintval_size == hintval_size_max);
-
-    mpi_errno =
-        MPID_Allreduce(&hintval_equal, &hintval_equal_global, 1, MPI_INT, MPI_LAND,
-                       comm_ptr, &errflag);
-    MPIR_ERR_CHECK(mpi_errno);
-
-    if (!hintval_equal_global)
+    if (!is_equal)
         goto fn_exit;
 
-
     /* Now that the sizes of the hintvals match, check to make sure
-     * the actual hintvals themselves are the equal */
-    hintval_global = (char *) MPL_malloc(strlen(hintval), MPL_MEM_OTHER);
+    * the actual hintvals themselves are the equal */
 
-    mpi_errno =
-        MPID_Allreduce(hintval, hintval_global, strlen(hintval), MPI_CHAR,
-                       MPI_MAX, comm_ptr, &errflag);
+    mpi_errno = MPIR_Allreduce_equal(hintval, hintval_size, MPI_CHAR, &is_equal, comm_ptr, &errflag);
+
     MPIR_ERR_CHECK(mpi_errno);
 
-    hintval_equal = !memcmp(hintval, hintval_global, strlen(hintval));
+    fn_exit:
+        *info_args_are_equal = is_equal;
+        return mpi_errno;
 
-    mpi_errno =
-        MPID_Allreduce(&hintval_equal, &hintval_equal_global, 1, MPI_INT, MPI_LAND,
-                       comm_ptr, &errflag);
-    MPIR_ERR_CHECK(mpi_errno);
+    fn_fail:
+        goto fn_exit;
 
-  fn_exit:
-    MPL_free(hintval_global);
-
-    *info_args_are_equal = hintval_equal_global;
-    return mpi_errno;
-
-  fn_fail:
-    goto fn_exit;
 }

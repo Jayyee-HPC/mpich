@@ -1435,6 +1435,8 @@ static const char *GetMPIOpString(MPI_Op o)
             return "MPI_REPLACE";
         case MPI_NO_OP:
             return "MPI_NO_OP";
+        case MPIX_EQUAL:
+            return "MPIX_EQUAL";
     }
     /* FIXME: default is not thread safe */
     MPL_snprintf(default_str, sizeof(default_str), "op=0x%x", o);
@@ -1859,7 +1861,6 @@ static int checkForUserErrcode(int errcode)
     error_ring_mutex_unlock();
     return errcode;
 }
-
 
 /* --BEGIN ERROR HANDLING-- */
 static const char *ErrcodeInvalidReasonStr(int reason)
