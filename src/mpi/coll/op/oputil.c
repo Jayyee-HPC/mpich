@@ -134,7 +134,6 @@ int MPIR_Reduce_equal(const void *sendbuf, MPI_Aint count, MPI_Datatype datatype
     return mpi_errno;
 }
 
-
 int MPIR_Allreduce_equal(const void *sendbuf, MPI_Aint count, MPI_Datatype datatype, int *is_equal,
         MPIR_Comm *comm_ptr, MPIR_Errflag_t *errflag)
 {

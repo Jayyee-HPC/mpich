@@ -77,6 +77,7 @@ cvars:
 === END_MPI_T_CVAR_INFO_BLOCK ===
 */
 
+
 int MPIR_Allreduce_allcomm_auto(const void *sendbuf, void *recvbuf, MPI_Aint count,
                                 MPI_Datatype datatype, MPI_Op op, MPIR_Comm * comm_ptr,
                                 MPIR_Errflag_t * errflag)
