@@ -361,11 +361,4 @@ typedef struct {
     MPIR_OP_TYPE_GROUP(COMPLEX_EXTRA)         \
     MPIR_OP_TYPE_GROUP(BYTE_EXTRA)
 
-/* array comparation functions */
-int MPIR_Reduce_equal(const void *sendbuf, MPI_Aint count, MPI_Datatype datatype, int root,
-  int *is_equal, MPIR_Comm *comm_ptr, MPIR_Errflag_t *errflag);
-
-int MPIR_Allreduce_equal(const void *sendbuf, MPI_Aint count, MPI_Datatype datatype, int *is_equal,
-        MPIR_Comm *comm_ptr, MPIR_Errflag_t *errflag);
-
 #endif /* MPIR_OP_UTIL_H_INCLUDED */
