@@ -94,7 +94,7 @@ int MPIR_Reduce_equal(const void *sendbuf, MPI_Aint count, MPI_Datatype datatype
 
     type_size = extent - lb;
 
-    //Dealing simple c stuct alignment and padding.
+    /* Dealing simple c stuct alignment and padding. */
     if ((type_size % sizeof(int)) == 0) 
     {
     	is_equal_pos = type_size * count;
@@ -154,7 +154,7 @@ int MPIR_Allreduce_equal(const void *sendbuf, MPI_Aint count, MPI_Datatype datat
 
     type_size = extent - lb;
 
-    //Dealing simple c stuct alignment and padding.
+    /* Dealing simple c stuct alignment and padding. */
     if ((type_size % sizeof(int)) == 0) 
     {
     	is_equal_pos = type_size * count;

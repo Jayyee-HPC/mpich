@@ -210,9 +210,9 @@ int MPIR_Op_is_commutative(MPI_Op);
 
 /* array comparation functions */
 int MPIR_Reduce_equal(const void *sendbuf, MPI_Aint count, MPI_Datatype datatype, int root,
-  int *is_equal, MPIR_Comm *comm_ptr, MPIR_Errflag_t *errflag);
+        int *is_equal, MPIR_Comm *comm_ptr, MPIR_Errflag_t *errflag);
 
-int MPIR_Allreduce_equal(const void *sendbuf, MPI_Aint count, MPI_Datatype datatype, int *is_equal,
-        MPIR_Comm *comm_ptr, MPIR_Errflag_t *errflag);
+int MPIR_Allreduce_equal(const void *sendbuf, MPI_Aint count, MPI_Datatype datatype, 
+        int *is_equal,MPIR_Comm *comm_ptr, MPIR_Errflag_t *errflag);
 
 #endif /* MPIR_OP_H_INCLUDED */
