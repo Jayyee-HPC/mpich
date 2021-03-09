@@ -47,7 +47,6 @@ int MPIR_Comm_split_type_network_topo(MPIR_Comm * comm_ptr, int key, const char 
 int MPIR_Comm_split_type_neighborhood(MPIR_Comm * comm_ptr, int split_type, int key,
                                       MPIR_Info * info_ptr, MPIR_Comm ** newcomm_ptr)
 {
-
     int flag = 0;
     char hintval[MPI_MAX_INFO_VAL + 1];
     int mpi_errno = MPI_SUCCESS;
@@ -237,7 +236,6 @@ static int get_color_from_subset_bitmap(int node_index, int *bitmap, int bitmap_
 static int network_split_by_minsize(MPIR_Comm * comm_ptr, int key, int subcomm_min_size,
                                     MPIR_Comm ** newcomm_ptr)
 {
-
     int mpi_errno = MPI_SUCCESS;
     int i, j, color;
     int comm_size = MPIR_Comm_size(comm_ptr);
@@ -454,7 +452,6 @@ static int network_split_by_minsize(MPIR_Comm * comm_ptr, int key, int subcomm_m
 static int network_split_by_min_memsize(MPIR_Comm * comm_ptr, int key, long min_mem_size,
                                         MPIR_Comm ** newcomm_ptr)
 {
-
     int mpi_errno = MPI_SUCCESS;
     MPIR_nettopo_type_e topo_type;
 
@@ -542,7 +539,7 @@ static int compare_info_hint(const char *hintval, MPIR_Comm * comm_ptr, int *inf
 
     if (!is_equal)
         goto fn_exit;
-
+    
     /* Now that the sizes of the hintvals match, check to make sure
     * the actual hintvals themselves are the equal */
 
@@ -556,5 +553,4 @@ static int compare_info_hint(const char *hintval, MPIR_Comm * comm_ptr, int *inf
 
     fn_fail:
         goto fn_exit;
-
 }
