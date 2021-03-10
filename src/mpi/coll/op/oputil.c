@@ -88,6 +88,55 @@ int MPIR_Reduce_equal(const void *sendbuf, MPI_Aint count, MPI_Datatype datatype
     MPI_Aint type_size, is_equal_pos, lb, extent;
     void *local_sendbuf,*local_recvbuf;
 
+    /*Check if only one short, int, or long*/
+    if(count == 1)
+    {
+        if(datatype == MPI_SHORT)
+        {
+            struct{
+                short val;
+                int is_equal;
+            }send_struct, recv_struct;
+            send_struct.val = *sendbuf;
+            send_struct.is_equal = 1;
+            mpi_errno = MPIR_Reduce_impl(send_struct, recv_struct, 1, MPI_SHORT_INT, MPIX_EQUAL, root, comm_ptr, errflag);
+
+            *is_equal = recv_struct.is_equal;
+            return mpi_errno;
+        }
+        else if(datatype == MPI_INT)
+        {
+            struct{
+                int val;
+                int is_equal;
+            }send_struct, recv_struct;
+            send_struct.val = *sendbuf;
+            send_struct.is_equal = 1;
+            mpi_errno = MPIR_Reduce_impl(send_struct, recv_struct, 1, MPI_2INT, MPIX_EQUAL, root, comm_ptr, errflag);
+
+            *is_equal = recv_struct.is_equal;
+            return mpi_errno;
+
+        }
+        else if(datatype == MPI_LONG)
+        {
+            struct{
+                long val;
+                int is_equal;
+            }send_struct, recv_struct;
+            send_struct.val = *sendbuf;
+            send_struct.is_equal = 1;
+            mpi_errno = MPIR_Reduce_impl(send_struct, recv_struct, 1, MPI_LONG_INT, MPIX_EQUAL, root, comm_ptr, errflag);
+
+            *is_equal = recv_struct.is_equal;
+            return mpi_errno;
+        }
+        else
+        {
+            /* continue */
+        }
+    }
+
     mpi_errno = MPIR_Type_get_extent_impl(datatype, &lb, &extent);
     if(mpi_errno != MPI_SUCCESS || lb != 0)//Not able to handle structs not starting at 0
     	return MPI_ERR_TYPE;
@@ -147,6 +196,55 @@ int MPIR_Allreduce_equal(const void *sendbuf, MPI_Aint count, MPI_Datatype datat
     int mpi_errno = MPI_SUCCESS;
     MPI_Aint type_size, is_equal_pos, lb, extent;
     void *local_sendbuf,*local_recvbuf;
+
+    /*Check if only one short, int, or long*/
+    if(count == 1)
+    {
+        if(datatype == MPI_SHORT)
+        {
+            struct{
+                short val;
+                int is_equal;
+            }send_struct, recv_struct;
+            send_struct.val = *sendbuf;
+            send_struct.is_equal = 1;
+            mpi_errno = MPIR_Allreduce_impl(send_struct, recv_struct, 1, MPI_SHORT_INT, MPIX_EQUAL, comm_ptr, errflag);
+
+            *is_equal = recv_struct.is_equal;
+            return mpi_errno;
+        }
+        else if(datatype == MPI_INT)
+        {
+            struct{
+                int val;
+                int is_equal;
+            }send_struct, recv_struct;
+            send_struct.val = *sendbuf;
+            send_struct.is_equal = 1;
+            mpi_errno = MPIR_Allreduce_impl(send_struct, recv_struct, 1, MPI_2INT, MPIX_EQUAL, comm_ptr, errflag);
+
+            *is_equal = recv_struct.is_equal;
+            return mpi_errno;
+
+        }
+        else if(datatype == MPI_LONG)
+        {
+            struct{
+                long val;
+                int is_equal;
+            }send_struct, recv_struct;
+            send_struct.val = *sendbuf;
+            send_struct.is_equal = 1;
+            mpi_errno = MPIR_Allreduce_impl(send_struct, recv_struct, 1, MPI_LONG_INT, MPIX_EQUAL, comm_ptr, errflag);
+
+            *is_equal = recv_struct.is_equal;
+            return mpi_errno;
+        }
+        else
+        {
+            /* continue */
+        }
+    }
 
     mpi_errno = MPIR_Type_get_extent_impl(datatype, &lb, &extent);
     if(mpi_errno != MPI_SUCCESS || lb != 0)//Not able to handle structs not starting at 0
