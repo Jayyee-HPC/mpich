@@ -42,10 +42,10 @@ typedef struct MPIR_shortint_eqltype {
 
 void MPIR_EQUAL_struct(void *invec, void *inoutvec, int *Len, MPI_Datatype * type)
 {
-    int len = *Len, data_len = 0, type_len = 0;
+    int len = *Len, element_len = 0, type_len = 0;
     int i, j, is_equal, *ints;
     void *invec_i_pos, *invec_i_bool_pos, *inoutvec_i_pos, *inoutvec_i_bool_pos;
-    MPI_Aint *aints, *counts, lb, extent, size;
+    MPI_Aint *aints, *counts, lb, extent, size, element_pos;
     MPI_Datatype *types;
     MPIR_Datatype *typeptr;
     MPIR_Datatype_contents *cp;
@@ -70,19 +70,22 @@ void MPIR_EQUAL_struct(void *invec, void *inoutvec, int *Len, MPI_Datatype * typ
 
         if(!(*(int*)invec_i_bool_pos) ||
             !(*(int*)inoutvec_i_bool_pos))
-        {/*compare values of is_equal*/
+        {
+        /* compare values of is_equal */
             *(int*)inoutvec_i_bool_pos  = 0;
         }
         else
-        {/*compare the content of the struct*/
+        {
+        /* compare the content of the struct */
             is_equal = 1;
 
             for(j = 0; j < cp->nr_types-1; ++j)
             {
                 MPIR_Type_size_impl(types[j], &size); 
-                data_len = ints[j + 1] * size;
-
-                if(memcmp(invec_i_pos+aints[j], inoutvec_i_pos+aints[j], data_len))
+                element_len = ints[j + 1] * size;
+                element_pos = aints[j];
+                /* compare jth element of ith struct */
+                if(memcmp(invec_i_pos+element_pos, inoutvec_i_pos+element_pos, element_len))
                     is_equal = 0;
             }
 
@@ -107,7 +110,8 @@ void MPIR_EQUAL(void *invec, void *inoutvec, int *Len, MPI_Datatype * type)
             MPIR_EQUAL_C_CASE_INT(MPIR_shortint_eqltype, len);
             break;
 
-        default:/* default treate the type as a derived datatype*/
+        /* default treate the type as a derived datatype */
+        default:
             MPIR_EQUAL_struct(invec, inoutvec, Len, type);
             break;
     }
@@ -115,9 +119,11 @@ void MPIR_EQUAL(void *invec, void *inoutvec, int *Len, MPI_Datatype * type)
 }
 
 
-int MPIR_EQUAL_derived_datatype_check(MPI_Datatype type)
-{//Check if the derived type meets the requirements for MPI_EQUAL
-    int mpi_errno = MPI_SUCCESS, combiner, *ints; 
+static int derived_datatype_check(MPI_Datatype type)
+{
+    /* Check if the derived type meets the requirements for MPI_EQUAL */
+    int mpi_errno = MPI_SUCCESS; 
+    int i, combiner, *ints; 
     MPI_Aint *aints, *counts;
     MPI_Datatype *types;
     MPIR_Datatype *typeptr;
@@ -135,22 +141,35 @@ int MPIR_EQUAL_derived_datatype_check(MPI_Datatype type)
 
     MPIR_Datatype_access_contents(cp, &ints, &aints, &counts, &types);
 
-    if(ints == NULL || ints[0] < 2) /*At least 2 elements is required, data, result*/
+    /* At least 2 elements is required, data, result */
+    if(ints == NULL || ints[0] < 2) 
     {
         MPIR_ERR_SET1(mpi_errno, MPI_ERR_OP, "**opundefined", "**opundefined %s", "MPIX_EQUAL");
         return mpi_errno;
     }
 
-    if(aints == NULL || cp->nr_aints < 2) /*addrs is required to avoid impacts of struct alignment*/
+    /* addrs is required to avoid impacts of struct alignment */
+    if(aints == NULL || cp->nr_aints < 2) 
     {
         MPIR_ERR_SET1(mpi_errno, MPI_ERR_OP, "**opundefined", "**opundefined %s", "MPIX_EQUAL");
         return mpi_errno;
     }
 
-    if(types[cp->nr_types-1] != MPI_INT) /*The last element has to be int*/
+    /* The last element has to be int */
+    if(types[cp->nr_types-1] != MPI_INT) 
     {
         MPIR_ERR_SET1(mpi_errno, MPI_ERR_OP, "**opundefined", "**opundefined %s", "MPIX_EQUAL");
         return mpi_errno;
+    }
+
+    /* All elements have to be basic datatypes */
+    for(i = 0; i < cp->nr_types-1; ++i)
+    {
+    	if(!HANDLE_IS_BUILTIN(types[i]))
+    	{
+    		MPIR_ERR_SET1(mpi_errno, MPI_ERR_OP, "**opundefined", "**opundefined %s", "MPIX_EQUAL");
+        	return mpi_errno;
+    	}
     }
 
     return mpi_errno;
@@ -158,7 +177,8 @@ int MPIR_EQUAL_derived_datatype_check(MPI_Datatype type)
 
 
 int MPIR_EQUAL_check_dtype(MPI_Datatype type)
-{//To support user defined datatypes, no actual type check now.
+{
+    /* To support user defined datatypes, no actual type check now. */
     int mpi_errno = MPI_SUCCESS;
 
     switch (type) {
@@ -169,8 +189,9 @@ int MPIR_EQUAL_check_dtype(MPI_Datatype type)
 
             break;
 
-        default:/* default treate the type as a derived datatype*/
-            mpi_errno = MPIR_EQUAL_derived_datatype_check(type);
+        /* default treate the type as a derived datatype*/
+        default:
+            mpi_errno = derived_datatype_check(type);
             break;
     }
 
