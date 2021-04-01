@@ -322,6 +322,7 @@ int MPIR_Typerep_create_struct(MPI_Aint count, const MPI_Aint * array_of_blockle
     MPI_Aint el_sz = 0;
     MPI_Datatype el_type = MPI_DATATYPE_NULL;
     int found_el_type = 0;
+    MPI_Aint el_count = 0;
     for (int i = 0; i < count; i++) {
         MPI_Aint tmp_el_sz;
         MPI_Datatype tmp_el_type;
@@ -333,10 +334,12 @@ int MPIR_Typerep_create_struct(MPI_Aint count, const MPI_Aint * array_of_blockle
         if (HANDLE_IS_BUILTIN(array_of_types[i])) {
             tmp_el_sz = MPIR_Datatype_get_basic_size(array_of_types[i]);
             tmp_el_type = array_of_types[i];
+            el_count += array_of_blocklengths[i];
         } else {
             MPIR_Datatype_get_ptr(array_of_types[i], old_dtp);
             tmp_el_sz = old_dtp->builtin_element_size;
             tmp_el_type = old_dtp->basic_type;
+            el_count += array_of_blocklengths[i] * old_dtp->n_builtin_elements;
         }
 
         if (found_el_type == 0) {
@@ -351,7 +354,7 @@ int MPIR_Typerep_create_struct(MPI_Aint count, const MPI_Aint * array_of_blockle
             el_type = MPI_DATATYPE_NULL;
         }
     }
-    newtype->n_builtin_elements = -1;   /* TODO */
+    newtype->n_builtin_elements = el_count;
     newtype->builtin_element_size = el_sz;
     newtype->basic_type = el_type;
 
