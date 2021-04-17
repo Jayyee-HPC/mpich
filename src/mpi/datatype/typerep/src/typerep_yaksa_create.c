@@ -46,10 +46,13 @@ static int update_yaksa_type(MPIR_Datatype * newtype, MPI_Datatype oldtype, MPI_
 
     if (count == 0) {
         /* this is a struct, deal with it in MPIR_Typerep_create_struct */
+    } else if (oldtype == MPI_2INT) {
+        newtype->n_builtin_elements = count * 2;
+        newtype->builtin_element_size = (MPI_Aint) MPIR_Datatype_get_basic_size(MPI_INT);
+        newtype->basic_type = MPI_INT;
     } else if (HANDLE_IS_BUILTIN(oldtype)) {
-        MPI_Aint el_sz = (MPI_Aint) MPIR_Datatype_get_basic_size(oldtype);
         newtype->n_builtin_elements = count;
-        newtype->builtin_element_size = el_sz;
+        newtype->builtin_element_size = (MPI_Aint) MPIR_Datatype_get_basic_size(oldtype);
         newtype->basic_type = oldtype;
     } else {
         MPIR_Datatype *old_dtp;
