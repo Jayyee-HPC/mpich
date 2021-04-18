@@ -1,0 +1,33 @@
+include: c/mpi.def
+page: t, mpi_frame
+    # run: gdb
+    $dump $(rank), $(size)
+
+    $(if:0)
+        $call test_subarray
+    $(elif:0)
+        $call test_darray
+    $(else)
+        $call test_1
+
+macros:
+    # dump_type: MPIX_Type_dump_typemap
+    dump_type: MPIX_Type_dump_typesig
+
+subcode: test_1
+    &call Type_commit, MPI_SHORT_INT
+        $call type_contig, 2
+        $call type_hvector, 2, 1, 10
+        $call type_struct, MPI_INT, 1, 0, MPI_SHORT, 10, 8, $(dt), 1, 100
+        $call type_contig, 2
+        $(dump_type)($(dt))
+
+subcode: test_subarray
+    &call Type_commit, MPI_CHAR
+        $call type_subarray, 3, [4, 5, 10], [2, 2, 2], [0, 1, 1]
+        $(dump_type)($(dt))
+
+subcode: test_darray
+    &call Type_commit, MPI_CHAR
+        $call type_darray, 10, 5, 3, [4, 4, 10], [2, -, 5], [1, -, 1]
+        $(dump_type)($(dt))
