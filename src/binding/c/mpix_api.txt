@@ -1,0 +1,15 @@
+MPIX_Type_dump_typemap:
+    datatype: DATATYPE
+    .desc: Dump the type map of the given datatype
+    .impl: direct
+{
+    return MPIR_type_dump_typemap(datatype);
+}
+
+MPIX_Type_dump_typesig:
+    datatype: DATATYPE
+    .desc: Dump the type signature of the given datatype
+    .impl: direct
+{
+    return MPIR_type_dump_typesig(datatype);
+}

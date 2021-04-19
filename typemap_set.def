@@ -1,0 +1,234 @@
+fncode: type_get_n_elem_extent(dt, MPI_Aint *p_n_elem, MPI_Aint *p_extent)
+    $if HANDLE_IS_BUILTIN(dt)
+        $if dt == MPI_2INT
+            *p_n_elem = 2
+            *p_extent = MPIR_Datatype_get_basic_size(MPI_INT)
+        $else
+            *p_n_elem = 1
+            *p_extent = MPIR_Datatype_get_basic_size(dt)
+        return
+    $call get_dt_ptr
+    *p_n_elem = dt_ptr->n_builtin_elements
+    *p_extent = dt_ptr->extent
+
+fncode: typemap_set(map, dt, MPI_Aint idx, MPI_Aint offset)
+    $if HANDLE_IS_BUILTIN(dt)
+        $if dt == MPI_2INT
+            map->types[idx] = MPI_INT
+            map->disps[idx] = offset
+            map->types[idx+1] = MPI_INT
+            map->disps[idx+1] = offset + MPIR_Datatype_get_basic_size(MPI_INT)
+        $else
+            map->types[idx] = dt
+            map->disps[idx] = offset
+        return
+    $elif MPIR_DATATYPE_IS_PREDEFINED(dt)
+        $call get_dt_ptr
+        $my MPI_Aint disp = dt_ptr->true_ub - MPIR_Datatype_get_basic_size(MPI_INT)
+        $(for:FLOAT,DOUBLE,LONG,SHORT)
+            $if dt == MPI_$1_INT
+                map->types[idx] = MPI_$1
+        map->disps[idx] = offset
+        map->types[idx+1] = MPI_INT
+        map->disps[idx+1] = offset + disp
+        return
+    $else
+        $my MPI_Aint n_elem, MPI_Aint extent
+
+        $call get_dt_ptr
+        $my MPIR_Datatype_contents *cp = dt_ptr->contents
+        $local int *p_ints, MPI_Aint *p_aints, MPI_Aint *p_counts, MPI_Datatype *p_types
+        MPIR_Datatype_access_contents(cp, &p_ints, &p_aints, &p_counts, &p_types)
+        $if cp->nr_counts == 0
+            $(set:c=-)
+            $call switch_combiner
+        $else
+            $(set:c=c)
+            $call switch_combiner
+
+    # --------------------------------
+    subcode: _set_dup
+        typemap_set(map, p_types[0], idx, offset)
+
+    subcode: _set_resized
+        typemap_set(map, p_types[0], idx, offset + $(lb))
+
+    subcode: _set_contig
+        type_get_n_elem_extent(p_types[0], &n_elem, &extent)
+        typemap_set(map, p_types[0], idx, offset)
+        $local i, j: MPI_Aint
+        $my MPI_Aint idx2 = idx + n_elem
+        $for i=1:$(n)
+            $for j=0:n_elem
+                map->types[idx2] = map->types[idx + j]
+                map->disps[idx2] = map->disps[idx + j] + extent * i
+                idx2++
+
+    # common for vector, indexed_block, indexed
+    subcode: _set_vector
+        type_get_n_elem_extent(p_types[0], &n_elem, &extent)
+        typemap_set(map, p_types[0], idx, offset)
+
+        $my k, i, j: MPI_Aint
+        $my MPI_Aint off2
+        $my MPI_Aint idx2 = idx + n_elem
+        $for k=0:$(n)
+            off2 = $(disp:k)$(ext)
+            $call _copy_inner_blk, off2 + extent * i
+
+    subcode: _set_indexed
+        type_get_n_elem_extent(p_types[0], &n_elem, &extent)
+        typemap_set(map, p_types[0], idx, offset + $(disp:0))
+
+        $my k, i, j: MPI_Aint
+        $my MPI_Aint off2
+        $my MPI_Aint idx2 = idx + n_elem
+        $for k=0:$(n)
+            off2 = ($(disp:k) - $(disp:0))$(ext)
+            $call _copy_inner_blk, off2 + extent * i
+
+    subcode: _set_struct
+        $my k, i, j: MPI_Aint
+        $my MPI_Aint off2
+        $my MPI_Aint idx2 = idx
+        $for k=0:$(n)
+            type_get_n_elem_extent(p_types[k], &n_elem, &extent)
+            typemap_set(map, p_types[k], idx2, offset + $(disp:k))
+            idx2 += n_elem
+            $for i=1:$(blkl:k)
+                $call _copy_elements, extent * i
+
+    # ---------------------
+    subcode: _copy_inner_blk(off)
+        $for i=0:$(blkl:k)
+            $if k || i
+                $call _copy_elements, $(off)
+
+    subcode: _copy_elements(off)
+        $for j=0:n_elem
+            map->types[idx2] = map->types[idx + j]
+            map->disps[idx2] = map->disps[idx + j] + $(off)
+            idx2++
+
+    # ---------------------
+    subcode: _set_subarray
+        $(set:sizei=p_sizes[i])
+        $(set:starti=p_starts[i])
+        &call set_ndim, subarray
+            $call _copy_elements, off2 - off0
+
+        subcode: init_counters_subarray
+            NOOP
+        subcode: inc_counter_i_subarray
+            counters[i]++
+            off2 += stride
+            $if counters[i] < p_subsizes[i]
+                break
+            off2 -= stride * p_subsizes[i]
+            counters[i] = 0
+
+    # ---------------------
+    subcode: _set_darray
+        $(set:sizei=p_gsizes[i])
+        $(set:starti=p_starts[i])
+
+        &call set_ndim, darray
+            $call _copy_elements, off2 - off0
+
+        subcode: init_counters_darray
+            $if p_isblk[0] == 0
+                $call init_counters_cyclic
+        subcode: inc_counter_i_darray
+            $if p_isblk[i] == 0
+                $call inc_counter_cyclic
+            $else
+                $call inc_counter_block
+
+        # -- cyclic - counters use actual offset
+        subcode: init_counters_cyclic
+            counters[0] = p_prank[0] * p_parg[0]
+        subcode: inc_counter_cyclic
+            $my MPI_Aint old_counter = counters[i]
+            counters[i]++
+            $if counters[i] % p_parg[i] == 0
+                counters[i] += p_parg[i] * (p_sizes[i] - 1)
+            $if counters[i] < p_gsizes[i]
+                off2 += stride * (counters[i] - old_counter)
+                break
+            # reset for next dimension
+            counters[i] = p_starts[i]
+            off2 += stride * (counters[i] - old_counter)
+
+        # -- block
+        subcode: inc_counter_block
+            counters[i]++
+            off2 += stride
+            $if counters[i] < p_parg[i]
+                break
+            # reset for next dimension
+            off2 -= stride * p_parg[i]
+            counters[i] = 0
+
+#---------------------------------------- 
+subcode: set_ndim(type)
+    $call calc_off0
+    type_get_n_elem_extent(p_types[0], &n_elem, &extent)
+    typemap_set(map, p_types[0], idx, offset + off0)
+    
+    $my MPI_Aint off2 = off0
+    $my MPI_Aint idx2 = idx + n_elem
+    # -- iter_ndim --
+    $my MPI_Aint *counters
+    counters = MPL_calloc($(n), sizeof(MPI_Aint), MPL_MEM_OTHER)
+    $call @init_counters_$(type)
+    $while 1
+        $call inc_counters
+        BLOCK
+    MPL_free(counters)
+
+    subcode: calc_off0
+        # high to low dimension
+        $my MPI_Aint off0 = 0
+        $if order == MPI_ORDER_C
+            $for i=0:$(n)
+                $call update_off0
+        $else
+            $for i=$(n)-1 downto 0
+                $call update_off0
+
+        subcode: update_off0
+            off0 = (off0 * $(sizei)) + $(starti)
+
+    subcode: inc_counters
+        # low to high dimension
+        $my alldone = 0
+        $my MPI_Aint stride = 1
+        $call @init_i
+        $while 1
+            $call inc_counter_i_$(type)
+            # -- next dimension
+            stride *= $(sizei)
+            $call @next_i
+        $if alldone
+            break
+
+    subcode: init_i
+        $my int i
+        $if order == MPI_ORDER_C
+            i = $(n) - 1
+        $else
+            i = 0
+
+    subcode: next_i
+        $if order == MPI_ORDER_C
+            i--
+            $call alldone, i < 0
+        $else
+            i++
+            $call alldone, i == $(n)
+        subcode: alldone(cond)
+            $if $(cond)
+                alldone = 1
+                break
+
+

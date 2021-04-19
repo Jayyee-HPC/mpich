@@ -1,0 +1,124 @@
+include: typemap_cases.def
+include: typemap_set.def
+include: typesig_set.def
+
+page: typemap, -
+    output_dir: src/mpi/datatype
+    module: c
+
+    $list MPIR_type_dump_typemap, MPIR_type_dump_typesig
+    $list MPIR_type_get_typemap, MPIR_type_get_typesig
+    $list MPIR_type_free_typemap, MPIR_type_free_typesig
+
+subcode: no-autoload
+    $struct typemap
+        MPI_Aint n
+        MPI_Datatype *types
+        MPI_Aint *disps
+
+    $struct typesig
+        MPI_Aint n
+        MPI_Datatype *types
+        MPI_Aint *counts
+
+subcode: _autoload
+    $register_name(dt) MPI_Datatype
+    $register_name(dt_ptr) MPIR_Datatype *
+    $register_name(map) struct typemap *
+    $register_name(sig) struct typesig *
+    $register_fmt(MPI_Aint) %ld
+
+subcode: get_dt_ptr
+    $my MPIR_Datatype *dt_ptr
+    MPIR_Datatype_get_ptr(dt, dt_ptr)
+    MPIR_Assert(dt_ptr != NULL);
+
+fncode: MPIR_type_dump_typesig(dt): int
+    $my sig
+    sig = MPIR_type_get_typesig(dt)
+    $for i=0:sig->n
+        $if i>0
+            $print ",-"
+        $print "%s:%ld-", MPIR_Datatype_builtin_to_string(sig->types[i]), (long) sig->counts[i]
+    $print
+
+    MPIR_type_free_typesig(sig)
+    return MPI_SUCCESS
+
+fncode: MPIR_type_dump_typemap(dt): int
+    $my MPI_Aint lb, MPI_Aint extent
+    MPIR_Type_get_extent_impl(dt, &lb, &extent);
+    printf("  %20s: %10ld\n", "lb", (long) lb)
+    printf("  %20s: %10ld\n", "ub", (long) (lb + extent))
+
+    $my map
+    map = MPIR_type_get_typemap(dt)
+    $for i=0:map->n
+        $print "  %20s: %10ld\n", MPIR_Datatype_builtin_to_string(map->types[i]), (long) map->disps[i]
+
+    MPIR_type_free_typemap(map)
+    return MPI_SUCCESS
+
+fncode: MPIR_type_get_typesig(dt)
+    $allocate sig
+    sig->n = 1
+    $map allocate(1) sig->types, sig->counts
+
+    $my MPI_Aint idx = 0
+    typesig_set(sig, dt, &idx, 1)
+    sig->n = idx
+    return sig
+
+fncode: MPIR_type_get_typemap(dt)
+    $allocate map
+
+    $if HANDLE_IS_BUILTIN(dt)
+        $if dt == MPI_2INT
+            map->n = 2
+        $else
+            map->n = 1
+    $else
+        $call get_dt_ptr
+        map->n = dt_ptr->n_builtin_elements
+
+    $call allocate_space
+    $my n_elem, extent: MPI_Aint
+    typemap_set(map, dt, 0, 0)
+    return map
+
+    subcode: allocate_space
+        MPIR_Assert(map->n > 0);
+        $map allocate(map->n), map->types, map->disps
+
+#---------------------------------------- 
+fncode: MPIR_type_free_typemap(map)
+    MPL_free(map->types);
+    MPL_free(map->disps);
+    MPL_free(map);
+
+fncode: MPIR_type_free_typesig(sig)
+    MPL_free(sig->types);
+    MPL_free(sig->counts);
+    MPL_free(sig);
+
+#---------------------------------------- 
+subcode: _autoload
+    $(block:frame_init)
+        $: /*
+        $:  * Copyright (C) by Argonne National Laboratory
+        $:  *     See COPYRIGHT in top-level directory
+        $:  */
+        NEWLINE
+    $include "mpiimpl.h"
+    $include "datatype.h"
+
+subcode: allocate(n, var)
+    $(if:var~.*types)
+        $(set:T=MPI_Datatype)
+    $(elif:var~.*(rank|isblk))
+        $(set:T=int)
+    $(else)
+        $(set:T=MPI_Aint)
+    $(if:var!~.*->)
+        $my $(T) *$(var)
+    $(var) = MPL_malloc($(n) * sizeof($(T)), MPL_MEM_OTHER)

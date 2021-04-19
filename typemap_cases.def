@@ -1,0 +1,170 @@
+subcode: switch_combiner
+    $call case, DUP, dup
+    $call case, RESIZED, resized
+    $call case, CONTIGUOUS, contig
+    $call case, VECTOR, vector
+    $call case, HVECTOR, vector
+    $call case, INDEXED_BLOCK, idxblk
+    $call case, HINDEXED_BLOCK, idxblk
+    $call case, INDEXED, indexed
+    $call case, HINDEXED, indexed
+    $call case, STRUCT, struct
+    $call case, SUBARRAY, subarray
+    $call case, DARRAY, darray
+    $else
+        MPIR_Assert(0)
+
+    subcode: case(NAME, type)
+        $case cp->combiner == MPI_COMBINER_$(NAME)
+            $(if:NAME~H)
+                $(set:h=h)
+                $(set:ext=)
+            $(else)
+                $(set:h=-)
+                $(set:ext= * extent)
+            $call set_$(type)
+
+    #---------------------------------------- 
+    subcode: set_dup
+        $call _set_dup
+
+    subcode: set_resized
+        $(if:c=-)
+            $(set:lb=p_aints[0])
+            $(set:extent=p_aints[1])
+        $(else)
+            $(set:lb=p_counts[0])
+            $(set:extent=p_counts[1])
+        $call _set_resized
+
+    subcode: set_contig
+        $(if:c=-)
+            $(set:n=p_ints[0])
+        $(else)
+            $(set:n=p_counts[0])
+        $call _set_contig
+
+    # --------------------------------------- 
+    subcode: set_vector
+        $(if:c=-)
+            $(set:n=p_ints[0])
+            $(set:blkl=p_ints[1])
+            $(if:h=-)
+                $(set:disp=p_ints[2] * $1)
+            $(else)
+                $(set:disp=p_aints[0])
+        $(else)
+            $(set:n=p_counts[0])
+            $(set:blkl=p_counts[1])
+            $(set:disp=p_counts[2] * $1)
+        $call _set_vector
+
+    subcode: set_idxblk
+        $(if:c=-)
+            $(set:n=p_ints[0])
+            $(set:blkl=p_ints[1])
+            $(if:h=-)
+                $(set:disp=p_ints[2+$1])
+            $(else)
+                $(set:disp=p_aints[$1])
+        $(else)
+            $(set:n=p_counts[0])
+            $(set:blkl=p_counts[1])
+            $(set:disp=p_counts[2+$1])
+        $call _set_indexed
+
+    subcode: set_indexed
+        $(if:c=-)
+            $(set:n=p_ints[0])
+            $my int *p_blkl = p_ints + 1
+            $(if:h=-)
+                $my int *p_disp = p_ints + 1 + $(n)
+            $(else)
+                $my MPI_Aint *p_disp = p_aints
+        $(else)
+            $(set:n=p_counts[0])
+            $my MPI_Aint *p_blkl = p_counts + 1
+            $my MPI_Aint *p_disp = p_counts + 1 + $(n)
+        $(set:blkl=p_blkl[$1])
+        $(set:disp=p_disp[$1])
+        $call _set_indexed
+
+    subcode: set_struct
+        $(if:c=-)
+            $(set:n=p_ints[0])
+            $my int *p_blkl = p_ints + 1
+            $my MPI_Aint *p_disp = p_aints
+        $(else)
+            $(set:n=p_counts[0])
+            $my MPI_Aint *p_blkl = p_counts + 1
+            $my MPI_Aint *p_disp = p_counts + 1 + $(n)
+        $(set:blkl=p_blkl[$1])
+        $(set:disp=p_disp[$1])
+        $call _set_struct
+
+    subcode: set_subarray
+        $(set:n=p_ints[0])
+        $(if:c=-)
+            $my int order = p_ints[1 + $(n) * 3]
+            $my int *p_sizes = p_ints + 1
+            $my int *p_subsizes = p_ints + 1 + $(n)
+            $my int *p_starts = p_ints + 1 + $(n) * 2
+        $(else)
+            $my int order = p_ints[2]
+            $my MPI_Aint *p_sizes = p_counts
+            $my MPI_Aint *p_subsizes = p_counts + $(n)
+            $my MPI_Aint *p_starts = p_counts + $(n) * 2
+        $call _set_subarray
+
+    subcode: set_darray
+        $my int size = p_ints[0]
+        $my int rank = p_ints[1]
+        $my int n = p_ints[2]
+        $(set:n=n)
+        $(if:c=-)
+            $my int *p_gsizes = p_ints + 3
+            $my int *p_distribs = p_ints + 3 + $(n)
+            $my int *p_dargs = p_ints + 3 + $(n) * 2
+            $my int *p_sizes = p_ints + 3 + $(n) * 3
+            $my int order = p_ints[3 + $(n) * 4]
+        $(else)
+            $my MPI_Aint *p_gsizes = p_counts
+            $my int *p_distribs = p_ints + 3
+            $my int *p_dargs = p_ints + 3 + $(n)
+            $my int *p_sizes = p_ints + 3 + $(n) * 2
+            $my int order = p_ints[3 + $(n) * 3]
+
+        $map allocate($(n)) p_prank, p_isblk, p_parg, p_starts
+        $for i=0:$(n)
+            size /= p_sizes[i]
+            p_prank[i] = rank / size
+            rank = rank % size
+            $if p_sizes[i] == 1
+                p_isblk[i] = 1
+                p_parg[i] = p_gsizes[i]
+                p_starts[i] = 0
+            $elif p_distribs[i] == MPI_DISTRIBUTE_BLOCK && p_dargs[i] ==  MPI_DISTRIBUTE_DFLT_DARG
+                p_parg[i] = p_gsizes[i] / p_sizes[i]
+                $if p_gsizes[i] % p_sizes[i] == 0
+                    p_isblk[i] = 1
+                    p_starts[i] = p_parg[i] * p_prank[i]
+                $else
+                    $my int r = p_gsizes[i] % p_sizes[i]
+                    p_isblk[i] = 2
+                    $if p_prank[i] < r
+                        p_parg[i] += 1
+                        p_starts[i] = p_parg[i] * p_prank[i]
+                    $else
+                        p_starts[i] = p_parg[i] * p_prank[i] + r
+            $elif p_distribs[i] == MPI_DISTRIBUTE_CYCLIC && p_dargs[i] ==  MPI_DISTRIBUTE_DFLT_DARG
+                p_isblk[i] = 0
+                p_parg[i] = 1
+                p_starts[i] = p_prank[i]
+            $else
+                p_isblk[i] = 0
+                p_parg[i] = p_dargs[i]
+                p_starts[i] = p_parg[i] * p_prank[i]
+        $call _set_darray
+        $(for:p_prank, p_isblk, p_parg, p_starts)
+            MPL_free($1)
+

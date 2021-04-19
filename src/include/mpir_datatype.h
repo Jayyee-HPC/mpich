@@ -615,4 +615,23 @@ MPI_Aint MPII_Datatype_blockindexed_count_contig(MPI_Aint count,
                                                  const MPI_Aint disp_array[],
                                                  int dispinbytes, MPI_Aint old_extent);
 
+struct typemap {
+    MPI_Aint n;
+    MPI_Datatype *types;
+    MPI_Aint *disps;
+};
+
+struct typesig {
+    MPI_Aint n;
+    MPI_Datatype *types;
+    MPI_Aint *counts;
+};
+
+int MPIR_type_dump_typemap(MPI_Datatype dt);
+int MPIR_type_dump_typesig(MPI_Datatype dt);
+struct typemap *MPIR_type_get_typemap(MPI_Datatype dt);
+struct typesig *MPIR_type_get_typesig(MPI_Datatype dt);
+void MPIR_type_free_typemap(struct typemap *map);
+void MPIR_type_free_typesig(struct typesig *sig);
+
 #endif /* MPIR_DATATYPE_H_INCLUDED */
