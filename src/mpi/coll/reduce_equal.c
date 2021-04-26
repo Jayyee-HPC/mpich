@@ -109,7 +109,7 @@ int MPIR_Reduce_equal(const void *sendbuf, MPI_Aint count, MPI_Datatype datatype
     *is_equal = *(int*)(local_recvbuf + is_equal_pos);
 
     MPL_free(local_recvbuf);
-    MPL_free(local_recvbuf);
+    MPL_free(local_sendbuf);
     MPI_Type_free(&derived_type);
     return mpi_errno;
 }

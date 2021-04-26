@@ -1499,4 +1499,8 @@ int MPIR_Scatterv_allcomm_nb(const void *sendbuf, const MPI_Aint * sendcounts,
                              MPI_Aint recvcount, MPI_Datatype recvtype, int root,
                              MPIR_Comm * comm_ptr, MPIR_Errflag_t * errflag);
 
+/******************************** Coll Length Check *************************/
+int MPIR_Coll_len_check_scatter(MPI_Aint count, MPI_Datatype datatype, int root, MPIR_Comm * comm_ptr, 
+        MPIR_Errflag_t * errflag);
+
 #endif /* MPIR_COLL_H_INCLUDED */
