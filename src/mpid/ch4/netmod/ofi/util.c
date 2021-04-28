@@ -21,7 +21,7 @@ int MPIDI_OFI_handle_cq_error_util(int vni_idx, ssize_t ret)
     return mpi_errno;
 }
 
-int MPIDI_OFI_retry_progress()
+int MPIDI_OFI_retry_progress(void)
 {
     /* We do not call progress on hooks form netmod level
      * because it is not reentrant safe.
@@ -157,7 +157,7 @@ void MPIDI_OFI_mr_key_free(int key_type, uint64_t alloc_key)
     }
 }
 
-void MPIDI_OFI_mr_key_allocator_destroy()
+void MPIDI_OFI_mr_key_allocator_destroy(void)
 {
     MPL_free(mr_key_allocator.bitmask);
 }
@@ -457,17 +457,13 @@ static int mpi_to_ofi(MPI_Datatype dt, enum fi_datatype *fi_dt, MPI_Op op, enum 
 #define _TBL MPIDI_OFI_global.win_op_table[i][j]
 #define CHECK_ATOMIC(fcn,field1,field2)            \
   atomic_count = 0;                                \
-  ret = fcn(MPIDI_OFI_global.ctx[0].tx,                \
-    fi_dt,                                 \
-    fi_op,                                 \
-            &atomic_count);                        \
-  if (ret == 0 && atomic_count != 0)                \
-    {                                              \
-  _TBL.field1 = 1;                             \
-  _TBL.field2 = atomic_count;                  \
-    }
+  ret = fcn(ep, fi_dt, fi_op, &atomic_count);      \
+  if (ret == 0 && atomic_count != 0) {             \
+    _TBL.field1 = 1;                               \
+    _TBL.field2 = atomic_count;                    \
+  }
 
-static void create_dt_map()
+static void create_dt_map(struct fid_ep *ep)
 {
     int i, j;
     size_t dtsize[FI_DATATYPE_LAST];
@@ -529,9 +525,10 @@ static void create_dt_map()
     }
 }
 
-void MPIDI_OFI_index_datatypes()
+void MPIDI_OFI_index_datatypes(struct fid_ep *ep)
 {
     /* do not generate map when atomics are not enabled */
-    if (MPIDI_OFI_ENABLE_ATOMICS)
-        create_dt_map();
+    if (MPIDI_OFI_ENABLE_ATOMICS) {
+        create_dt_map(ep);
+    }
 }

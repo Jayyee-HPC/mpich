@@ -257,7 +257,7 @@ int MPIDI_OFI_am_rdma_read_ack_handler(int handler_id, void *am_hdr, void *data,
                                        MPI_Aint in_data_sz, int is_local, int is_async,
                                        MPIR_Request ** req);
 int MPIDI_OFI_control_dispatch(void *buf);
-void MPIDI_OFI_index_datatypes(void);
+void MPIDI_OFI_index_datatypes(struct fid_ep *ep);
 int MPIDI_OFI_mr_key_allocator_init(void);
 uint64_t MPIDI_OFI_mr_key_alloc(int key_type, uint64_t requested_key);
 void MPIDI_OFI_mr_key_free(int key_type, uint64_t index);
@@ -267,9 +267,8 @@ void MPIDI_OFI_mr_key_allocator_destroy(void);
 #define MPIDI_OFI_INIT_CHUNK_CONTEXT(win,sigreq)                        \
     do {                                                                \
         if (sigreq) {                                                   \
-            int tmp;                                                    \
             MPIDI_OFI_chunk_request *creq;                              \
-            MPIR_cc_incr((*sigreq)->cc_ptr, &tmp);                      \
+            MPIR_cc_inc((*sigreq)->cc_ptr);                             \
             creq=(MPIDI_OFI_chunk_request*)MPL_malloc(sizeof(*creq), MPL_MEM_BUFFER); \
             MPIR_ERR_CHKANDSTMT(creq == NULL, mpi_errno, MPI_ERR_NO_MEM, goto fn_fail, "**nomem"); \
             creq->event_id = MPIDI_OFI_EVENT_CHUNK_DONE;                \
