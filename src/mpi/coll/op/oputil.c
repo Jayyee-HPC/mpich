@@ -24,7 +24,8 @@ static op_name_t mpi_ops[] = {
     {MPI_MINLOC, "minloc"},
     {MPI_MAXLOC, "maxloc"},
     {MPI_REPLACE, "replace"},
-    {MPI_NO_OP, "no_op"}
+    {MPI_NO_OP, "no_op"},
+    {MPIX_EQUAL, "equal"}
 };
 
 MPI_Datatype MPIR_Op_builtin_search_by_shortname(const char *short_name)

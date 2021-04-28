@@ -12,6 +12,7 @@ mpi_core_sources += \
     src/mpi/coll/op/opband.c         \
     src/mpi/coll/op/opbor.c          \
     src/mpi/coll/op/opbxor.c         \
+    src/mpi/coll/op/opequal.c        \
     src/mpi/coll/op/opland.c         \
     src/mpi/coll/op/oplor.c          \
     src/mpi/coll/op/oplxor.c         \
