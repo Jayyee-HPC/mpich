@@ -12,6 +12,7 @@
 int main(int argc, char **argv)
 {
     int rank, size, i, j;
+    int mpi_errno = MPI_SUCCESS; 
     int table[MAX_PROCESSES][MAX_PROCESSES];
     int errors = 0;
     int participants;
@@ -55,8 +56,12 @@ int main(int argc, char **argv)
         /* inefficient allgather */
         for (i = 0; i < participants; i++) {
             void *sendbuf = (i == rank ? MPI_IN_PLACE : &table[begin_row][0]);
-            MPI_Gatherv(sendbuf, send_count, MPI_INT,
+            mpi_errno = MPI_Gatherv(sendbuf, send_count, MPI_INT,
                         &table[0][0], recv_counts, displs, MPI_INT, i, MPI_COMM_WORLD);
+
+            if (mpi_errno) {
+                    MTestPrintError(mpi_errno);
+                }
         }
 
 

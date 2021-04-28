@@ -163,6 +163,13 @@ int MPIR_Gatherv(const void *sendbuf, MPI_Aint sendcount, MPI_Datatype sendtype,
 {
     int mpi_errno = MPI_SUCCESS;
 
+#ifdef HAVE_ERROR_CHECKING
+    mpi_errno = MPIR_Coll_len_check_scatterv(sendcount, sendtype, recvcounts, 
+                        recvtype, root, comm_ptr, errflag);
+    if(mpi_errno != MPI_SUCCESS)
+      return mpi_errno; 
+#endif //def HAVE_ERROR_CHECKING 
+
     if ((MPIR_CVAR_DEVICE_COLLECTIVES == MPIR_CVAR_DEVICE_COLLECTIVES_all) ||
         ((MPIR_CVAR_DEVICE_COLLECTIVES == MPIR_CVAR_DEVICE_COLLECTIVES_percoll) &&
          MPIR_CVAR_BARRIER_DEVICE_COLLECTIVE)) {

@@ -260,6 +260,13 @@ int MPIR_Reduce(const void *sendbuf, void *recvbuf, MPI_Aint count, MPI_Datatype
                 MPI_Op op, int root, MPIR_Comm * comm_ptr, MPIR_Errflag_t * errflag)
 {
     int mpi_errno = MPI_SUCCESS;
+
+#ifdef HAVE_ERROR_CHECKING
+    mpi_errno = MPIR_Coll_len_check_scatter(count, datatype, root, &op, comm_ptr, errflag);
+    if(mpi_errno != MPI_SUCCESS)
+      return mpi_errno; 
+#endif //def HAVE_ERROR_CHECKING 
+
     void *in_recvbuf = recvbuf;
     void *host_sendbuf;
     void *host_recvbuf;
