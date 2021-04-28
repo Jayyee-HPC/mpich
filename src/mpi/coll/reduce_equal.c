@@ -92,9 +92,9 @@ int MPIR_Reduce_equal(const void *sendbuf, MPI_Aint count, MPI_Datatype datatype
     MPI_Aint s_displacements[2] = {0, is_equal_pos};
 
     /* set up type */
-    mpi_errno = MPI_Type_create_struct(s_count, s_blocklengths, s_displacements, s_types, &derived_type);
-    MPI_Type_commit(&derived_type);
-
+    mpi_errno = MPIR_Type_create_struct_impl(s_count, s_blocklengths, s_displacements, s_types, &derived_type);
+    mpi_errno = MPIR_Type_commit_impl(&derived_type);
+                     
     mpi_errno = MPIR_Type_get_extent_impl(derived_type, &lb, &extent);
 
     local_sendbuf = MPL_malloc(extent-lb, MPL_MEM_OTHER);
@@ -110,7 +110,7 @@ int MPIR_Reduce_equal(const void *sendbuf, MPI_Aint count, MPI_Datatype datatype
 
     MPL_free(local_recvbuf);
     MPL_free(local_sendbuf);
-    MPI_Type_free(&derived_type);
+    MPIR_Type_free_impl(&derived_type);
     return mpi_errno;
 }
 
@@ -201,8 +201,9 @@ int MPIR_Allreduce_equal(const void *sendbuf, MPI_Aint count, MPI_Datatype datat
     MPI_Aint s_displacements[2] = {0, is_equal_pos};
 
     /* set up type */
-    mpi_errno = MPI_Type_create_struct(s_count, s_blocklengths, s_displacements, s_types, &derived_type);
-    MPI_Type_commit(&derived_type);
+    mpi_errno = MPIR_Type_create_struct_impl(s_count, s_blocklengths, s_displacements, s_types, &derived_type);
+
+    mpi_errno = MPIR_Type_commit_impl(&derived_type);
 
     mpi_errno = MPIR_Type_get_extent_impl(derived_type, &lb, &extent);
 
@@ -219,6 +220,6 @@ int MPIR_Allreduce_equal(const void *sendbuf, MPI_Aint count, MPI_Datatype datat
 
     MPL_free(local_sendbuf);
     MPL_free(local_recvbuf);
-    MPI_Type_free(&derived_type);
+    MPIR_Type_free_impl(&derived_type);
     return mpi_errno;
 }
