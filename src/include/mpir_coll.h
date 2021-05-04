@@ -1506,4 +1506,19 @@ int MPIR_Coll_len_check_scatter(MPI_Aint count, MPI_Datatype datatype, int root,
 int MPIR_Coll_len_check_scatterv(MPI_Aint sendcount, MPI_Datatype sendtype, const MPI_Aint* recvcounts, 
                         MPI_Datatype recvtype, int root, MPIR_Comm * comm_ptr, MPIR_Errflag_t * errflag);
 
+int MPIR_Coll_len_check_allreduce(MPI_Aint count, MPI_Datatype datatype, MPI_Op * op, MPIR_Comm * comm_ptr, 
+                        MPIR_Errflag_t * errflag);
+
+int MPIR_Coll_len_check_allgather(MPI_Aint sendcount, MPI_Datatype sendtype, MPI_Aint recvcount, 
+                        MPI_Datatype recvtype, MPI_Op * op, MPIR_Comm * comm_ptr, MPIR_Errflag_t * errflag);
+
+int MPIR_Coll_len_check_allgatherv(MPI_Aint sendcount, MPI_Datatype sendtype, const MPI_Aint *recvcounts, 
+                        MPI_Datatype recvtype, MPIR_Comm * comm_ptr, MPIR_Errflag_t * errflag);
+
+int MPIR_Coll_len_check_alltoallv(const MPI_Aint* sendcounts, MPI_Datatype sendtype, const MPI_Aint *recvcounts, 
+		                  MPI_Datatype recvtype, bool is_mpi_inplace, MPIR_Comm * comm_ptr, MPIR_Errflag_t * errflag);
+
+int MPIR_Coll_len_check_alltoallw(const MPI_Aint* sendcounts, const MPI_Datatype *sendtypes, const MPI_Aint *recvcounts, 
+		                  const MPI_Datatype *recvtypes, bool is_mpi_inplace, MPIR_Comm * comm_ptr, MPIR_Errflag_t * errflag);                      
+
 #endif /* MPIR_COLL_H_INCLUDED */

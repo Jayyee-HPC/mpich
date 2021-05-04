@@ -6,7 +6,7 @@
 #include "mpiimpl.h"
 
 #ifndef MPI_DATATYPE_HASH_UNDEFINED
-#define MPI_DATATYPE_HASH_UNDEFINED 0xFFFFFFFF
+#define MPI_DATATYPE_HASH_UNDEFINED 0xFFFF0000
 #endif //ndef MPI_DATATYPE_HASH_UNDEFINED
 
 #ifndef CHAR_BIT
@@ -58,7 +58,12 @@ static void  print_datatype_items(MPI_Datatype type,  MPIR_Comm * comm_ptr)
     MPIR_Datatype *typeptr;
     MPIR_Datatype_contents *cp;
     char* combiner_name;
-
+    
+    if(type == MPI_DATATYPE_NULL)
+    {
+        printf("Rank %d, NULL datatype \n", comm_ptr->rank);
+        return;
+    }
     MPIR_Type_get_envelope_impl(type, &nints, &nadds, &ntypes, &combiner);
 
     if(nints == 0 || nadds == 0 || ntypes == 0)
@@ -212,6 +217,16 @@ static int dtype_sig_generator_n(MPI_Datatype type, type_sig *coll_type_sig, MPI
     type_sig temp_sig_to_return, temp_sig_0, temp_sig_1;
     struct typesig *sig;
 
+    /* MPIR_type_get_typesig() Not able to handle MPI_DATATYPE_NULL*/
+    if(type == MPI_DATATYPE_NULL)
+    {
+        baisc_dtype_sig_generator(type, &temp_sig_to_return);
+        coll_type_sig->num_types = 0;
+        coll_type_sig->hash_value = temp_sig_to_return.hash_value;
+
+        return mpi_errno;
+    }
+
     sig = MPIR_type_get_typesig(type);
 
     /*Generate type sig for the first basic type*/
@@ -254,7 +269,11 @@ static int dtype_sig_generator_n(MPI_Datatype type, type_sig *coll_type_sig, MPI
         } 
     }
 
-    coll_type_sig->num_types = temp_sig_to_return.num_types;
+    if(count == 0)
+        coll_type_sig->num_types = 0;
+    else 
+        coll_type_sig->num_types = temp_sig_to_return.num_types;
+
     coll_type_sig->hash_value = temp_sig_to_return.hash_value;
 
     return mpi_errno;
@@ -265,6 +284,12 @@ static uint64_t dtype_get_len(MPI_Datatype type, MPI_Aint count)
 {
     uint64_t type_len;
 
+    if(type == MPI_DATATYPE_NULL)
+    {
+        type_len = 0;
+        return type_len;
+    }
+
     MPIR_Datatype_get_size_macro(type, type_len);
 	type_len *= count;
 
@@ -272,7 +297,7 @@ static uint64_t dtype_get_len(MPI_Datatype type, MPI_Aint count)
 }
 
 /*
-Collective length check for: bcast,reduce,allreduce,reducescatter,scan,exscan,gather,scatter.
+Collective length check for: bcast, reduce, scan, exscan, gather, scatter.
 Input: count, datatype, root, *comm_ptr, *errflag, *op(NULL if no op used).
 Output: error handle
  */
@@ -299,12 +324,13 @@ int MPIR_Coll_len_check_scatter(MPI_Aint count, MPI_Datatype datatype, int root,
         sig.hash_value += root;
 
         /* Append op info to the hash_value*/
-        if(op != NULL)
+        /* Customized op may have different id on different process, so don't check them*/
+        if(op != NULL && HANDLE_IS_BUILTIN(*op))
             sig.hash_value += (*op);
 
         mpi_errno = MPIR_Allreduce_equal(&sig, 2, MPI_UINT64_T, &is_equal, comm_ptr, errflag);
        
-        if(is_equal && (*errflag == MPIR_ERR_NONE))
+        if(is_equal)
             return mpi_errno;
         else
         {
@@ -327,7 +353,7 @@ int MPIR_Coll_len_check_scatter(MPI_Aint count, MPI_Datatype datatype, int root,
                     type_len += root;
 
                     /* Append op info to the type_len*/
-                    if(op != NULL)
+                    if(op != NULL && HANDLE_IS_BUILTIN(*op))
                         type_len += (*op);
 
 					mpi_errno = MPIR_Allreduce_equal(&type_len, 1, MPI_UINT64_T, &is_equal, comm_ptr, errflag);
@@ -359,7 +385,7 @@ int MPIR_Coll_len_check_scatter(MPI_Aint count, MPI_Datatype datatype, int root,
         /* Do not check root info when using inter communicator*/
 
         /* Append op info to the hash_value*/
-        if(op != NULL)
+        if(op != NULL && HANDLE_IS_BUILTIN(*op))
             sig.hash_value += (*op);        
         
         /* Please verify: root mismatch may impact this function, is extra root confirmation needed?*/
@@ -367,7 +393,7 @@ int MPIR_Coll_len_check_scatter(MPI_Aint count, MPI_Datatype datatype, int root,
 
         mpi_errno = MPIR_Bcast_impl(&is_equal, 1, MPI_INT, root, comm_ptr, errflag);
        
-        if(is_equal && (*errflag == MPIR_ERR_NONE))
+        if(is_equal)
             return mpi_errno;
         else
         {
@@ -389,12 +415,12 @@ int MPIR_Coll_len_check_scatter(MPI_Aint count, MPI_Datatype datatype, int root,
                     /* Do not check root info when using inter communicator*/
 
                     /* Append op info to the type_len*/
-                    if(op != NULL)
+                    if(op != NULL && HANDLE_IS_BUILTIN(*op))
                         type_len += (*op);
 
 					mpi_errno = MPIR_Allreduce_equal(&type_len, 1, MPI_UINT64_T, &is_equal, comm_ptr, errflag);
 
-					if(is_equal && (*errflag == MPIR_ERR_NONE))
+					if(is_equal)
             			return mpi_errno;
 				}
             }
@@ -446,7 +472,12 @@ int MPIR_Coll_len_check_scatterv(MPI_Aint sendcount, MPI_Datatype sendtype, cons
                 /* Append root info to the hash_value*/
                 temp_sig.hash_value += root;
 
-                if(temp_sig.hash_value != rsigs[i].hash_value || temp_sig.num_types != rsigs[i].num_types)
+                if(root == i && (sendtype == MPI_DATATYPE_NULL || sendcount <= 0))
+                {
+                    /* In case MPI_IN_PLACE in igatherv */
+                    /* Do nothing */      
+                }
+                else if(temp_sig.hash_value != rsigs[i].hash_value || temp_sig.num_types != rsigs[i].num_types)
                 {
                     is_equal = 0;
                     break;
@@ -459,7 +490,7 @@ int MPIR_Coll_len_check_scatterv(MPI_Aint sendcount, MPI_Datatype sendtype, cons
         if(rsigs != NULL)
             MPL_free(rsigs);
 
-	    if(is_equal && (*errflag == MPIR_ERR_NONE))
+	    if(is_equal)
 	        return mpi_errno;
 	    else
 	    {
@@ -500,7 +531,7 @@ int MPIR_Coll_len_check_scatterv(MPI_Aint sendcount, MPI_Datatype sendtype, cons
 
                     mpi_errno = MPIR_Bcast_impl(&is_equal, 1, MPI_INT, root, comm_ptr, errflag);
 
-					if(is_equal && (*errflag == MPIR_ERR_NONE))
+					if(is_equal)
             			return mpi_errno;
 				}
             }
@@ -569,7 +600,7 @@ else
         if(rsigs != NULL)
             MPL_free(rsigs);
 
-        if(is_equal && (*errflag == MPIR_ERR_NONE))
+        if(is_equal)
             return mpi_errno;
         else
         {
@@ -629,6 +660,146 @@ else
     }
 }
 
+
+/*
+Collective length check for: allreduce.
+Input: count, datatype, *comm_ptr, *errflag, *op.
+Output: error handle
+ */
+int MPIR_Coll_len_check_allreduce(MPI_Aint count, MPI_Datatype datatype, MPI_Op * op, MPIR_Comm * comm_ptr, 
+        MPIR_Errflag_t * errflag)
+{
+    int mpi_errno = MPI_SUCCESS;
+
+    if (comm_ptr->comm_kind == MPIR_COMM_KIND__INTRACOMM || comm_ptr->comm_kind == MPIR_COMM_KIND__INTRACOMM) {
+        /* intracommunicator */
+        /* Temporay solution for intercommunicator. It seems no different between in inter and intra comm in allreduce*/
+
+        type_sig sig;
+        int is_equal;
+
+        mpi_errno = dtype_sig_generator_n(datatype, &sig, count);
+
+        /* Append op info to the hash_value*/
+        if(HANDLE_IS_BUILTIN(*op))
+            sig.hash_value += (*op);
+
+        // TODO: MPIR_Allreduce_equal should be the correct way if MPIR_Coll_len_check_allreduce is put under MPI_Allreduce
+        // Now cause dead loop if cvar set MPI_Allreduce to use non blocking
+        // mpi_errno = MPIR_Allreduce_equal(&sig, 2, MPI_UINT64_T, &is_equal, comm_ptr, errflag);
+
+        /* Temporary solution*/
+        int comm_size, i;
+        type_sig* type_sigs;
+
+        if(comm_ptr->comm_kind == MPIR_COMM_KIND__INTRACOMM)
+            comm_size = comm_ptr->local_size;
+        else
+            comm_size = comm_ptr->remote_size;
+
+        type_sigs = (type_sig*)MPL_malloc(sizeof(type_sig) * comm_size, MPL_MEM_OTHER);
+
+        mpi_errno = MPIR_Allgather_impl(&sig, 2, MPI_UINT64_T,type_sigs, 2, MPI_UINT64_T, comm_ptr, errflag);
+
+        is_equal = 1;
+        for(i = 0; i < comm_size; ++i)
+        {
+            if(type_sigs[i].hash_value != sig.hash_value || type_sigs[i].num_types != sig.num_types)
+            {
+                is_equal = 0;
+            }
+        }
+        MPL_free(type_sigs);
+
+        if(is_equal)
+            return mpi_errno;
+        else
+        {
+            if(*errflag == MPIR_ERR_NONE){
+                /* Check if MPI_BYTE being used */
+                uint64_t type_len[2], *type_lens;
+                int is_byte_type, is_byte_type_recv;
+
+                type_lens = (uint64_t *)MPL_malloc(sizeof(uint64_t) * 2 * comm_size, MPL_MEM_OTHER);
+                /* Check if at least one process using MPI_BYTE*/
+                type_len[0] = (datatype == MPI_BYTE) ? 1 : 0;
+
+                /* For MPI_BYTE, only check the numbers of bits */
+                type_len[1] = dtype_get_len(datatype, count);  
+
+                /* Append op info to the type_len*/
+                if(HANDLE_IS_BUILTIN(*op))
+                    type_len[1] += (*op);
+            
+                mpi_errno = MPIR_Allgather_impl(type_len, 2, MPI_UINT64_T, type_lens, 2, MPI_UINT64_T, comm_ptr, errflag);
+
+                is_equal = 1;
+                is_byte_type_recv = 0;
+                for(i = 0; i < comm_size; ++i)
+                {
+                    if(type_lens[2*i] == 1)
+                        is_byte_type_recv = 1;
+
+                    if(type_lens[2*i+1] != type_len[1])
+                        is_equal = 0;
+                }
+
+                MPL_free(type_lens);
+
+                if(is_equal && (is_byte_type_recv || is_byte_type))
+                    return mpi_errno;
+
+            }
+
+            *errflag = MPI_ERR_ARG;
+            MPIR_ERR_SET(mpi_errno, MPI_ERR_ARG, "**collective_size_mismatch");
+            return mpi_errno;	               
+        }
+        /* End Temporary solution*/
+        
+       
+        if(is_equal)
+            return mpi_errno;
+        else
+        {
+            if(*errflag == MPIR_ERR_NONE){
+            	/* Check if MPI_BYTE being used */
+				uint64_t type_len;
+				int is_byte_type, is_byte_type_recv;
+
+				/* Check if at least one process using MPI_BYTE*/
+				is_byte_type = (datatype == MPI_BYTE) ? 1 : 0;
+				mpi_errno = MPIR_Allreduce_impl(&is_byte_type, &is_byte_type_recv, 1, MPI_INT, 
+						MPI_LOR, comm_ptr, errflag);
+				 
+				if(is_byte_type_recv)
+				{
+					/* For MPI_BYTE, only check the numbers of bits */
+					type_len = dtype_get_len(datatype, count);  
+
+                    /* Append op info to the type_len*/
+                    if(HANDLE_IS_BUILTIN(*op))
+                        type_len += (*op);
+
+					mpi_errno = MPIR_Allreduce_equal(&type_len, 1, MPI_UINT64_T, &is_equal, comm_ptr, errflag);
+
+					if(is_equal && (*errflag == MPIR_ERR_NONE))
+            			return mpi_errno;
+				}
+            }
+
+	        *errflag = MPI_ERR_ARG;
+	        MPIR_ERR_SET(mpi_errno, MPI_ERR_ARG, "**collective_size_mismatch");
+	        return mpi_errno;	
+        }
+    }
+    else
+    {
+        /* intercommunicator */   
+        return mpi_errno;
+    }
+}
+
 /*
 Collective length check for: Allgather,Allreduce, Alltoall.
 Input: sendcount, sendtype, recvcount, recvtype, *op, *comm_ptr, *errflag
@@ -638,77 +809,182 @@ int MPIR_Coll_len_check_allgather(MPI_Aint sendcount, MPI_Datatype sendtype, MPI
 		MPI_Op * op, MPIR_Comm * comm_ptr, MPIR_Errflag_t * errflag)
 {
 	int mpi_errno = MPI_SUCCESS;
-    type_sig sendsig, recvsig;
-    int i, is_equal;
-    uint64_t sig_compare_buf[4];
 
-    mpi_errno = dtype_sig_generator_n(sendtype, &sendsig, sendcount);
-    
-    /* Append op info to the hash_value*/
-    if(op != NULL)
-    {
-        sendsig.hash_value += (*op);
-        recvsig.hash_value += (*op);
-    }
+    if (comm_ptr->comm_kind == MPIR_COMM_KIND__INTRACOMM) {
+        type_sig sendsig, recvsig;
+        int i, is_equal;
+        uint64_t sig_compare_buf[4];
+
+
+        mpi_errno = dtype_sig_generator_n(sendtype, &sendsig, sendcount);
+
         
-
-    mpi_errno = dtype_sig_generator_n(recvtype, &recvsig, recvcount);
-
-    sig_compare_buf[0] = sendsig.hash_value;
-    sig_compare_buf[1] = sendsig.num_types;
-    sig_compare_buf[2] = recvsig.hash_value;
-    sig_compare_buf[3] = recvsig.num_types;
-
-    mpi_errno = MPIR_Allreduce_equal(sig_compare_buf, 4, MPI_UINT64_T, &is_equal, comm_ptr, errflag);
-
-    if(is_equal && (*errflag == MPIR_ERR_NONE))
-    {
-        /* Check if sendbuf matches recvbuf */
-    	if(sendsig.hash_value == recvsig.hash_value && 
-    			sendsig.num_types == recvsig.num_types)
+        /* Append op info to the hash_value*/
+        if(op != NULL && HANDLE_IS_BUILTIN(*op))
         {
-            return mpi_errno;
-        }       
+            sendsig.hash_value += (*op);
+            recvsig.hash_value += (*op);
+        }            
+
+        mpi_errno = dtype_sig_generator_n(recvtype, &recvsig, recvcount);
+
+        sig_compare_buf[0] = sendsig.hash_value;
+        sig_compare_buf[1] = sendsig.num_types;
+        sig_compare_buf[2] = recvsig.hash_value;
+        sig_compare_buf[3] = recvsig.num_types;
+
+        mpi_errno = MPIR_Allreduce_equal(sig_compare_buf, 4, MPI_UINT64_T, &is_equal, comm_ptr, errflag);
+
+        if(is_equal)
+        {
+            /* Check if sendbuf matches recvbuf */
+            if(sendsig.hash_value == recvsig.hash_value && 
+                    sendsig.num_types == recvsig.num_types)
+            {
+                return mpi_errno;
+            }  
+
+            /* For MPI_IN_PLACE usage */
+            if(sendtype == MPI_DATATYPE_NULL || sendcount == 0) 
+            {
+                return mpi_errno;
+            }   
+        }
+
+       //printf("%d %d %d %ld %ld %08lx %08lx %08lx %08lx\n", comm_ptr->rank, is_equal, *errflag, sendcount, recvcount, sig_compare_buf[0], sig_compare_buf[1], sig_compare_buf[2], sig_compare_buf[3]);
+
+        /* Check if MPI_BYTE being used */
+        uint64_t type_len[2];
+        int is_byte_type, is_byte_type_recv;
+
+
+        /* Check if at least one process using MPI_BYTE*/
+        is_byte_type = (sendtype == MPI_BYTE || recvtype == MPI_BYTE) ? 1 : 0;
+
+        mpi_errno = MPIR_Allreduce_impl(&is_byte_type, &is_byte_type_recv, 1, MPI_INT, 
+                MPI_LOR, comm_ptr, errflag);
+            
+        if(is_byte_type_recv)
+        {
+            /* For MPI_BYTE, only check the numbers of bits */
+            type_len[0] = dtype_get_len(sendtype, sendcount);  
+            type_len[1] = dtype_get_len(recvtype, recvcount); 
+
+            /* Append op info to the type_len*/
+            if(op != NULL && HANDLE_IS_BUILTIN(*op))
+            {
+                type_len[0] += (*op);
+                type_len[1] += (*op);
+            }
+                
+            mpi_errno = MPIR_Allreduce_equal(type_len, 2, MPI_UINT64_T, &is_equal, comm_ptr, errflag);
+
+            if(is_equal && type_len[0] == type_len[1])
+                return mpi_errno;
+
+            /* For MPI_IN_PLACE usage */
+            if(is_equal && (sendtype == MPI_DATATYPE_NULL || sendcount == 0)) 
+            {
+                return mpi_errno;
+            }       
+        }
+
+        *errflag = MPI_ERR_ARG;
+        MPIR_ERR_SET(mpi_errno, MPI_ERR_ARG, "**collective_size_mismatch");
+        return mpi_errno;
     }
-
-
-    /* Check if MPI_BYTE being used */
-    uint64_t type_len[2];
-    int is_byte_type, is_byte_type_recv;
-
-
-    /* Check if at least one process using MPI_BYTE*/
-    is_byte_type = (sendtype == MPI_BYTE || recvtype == MPI_BYTE) ? 1 : 0;
-
-    mpi_errno = MPIR_Allreduce_impl(&is_byte_type, &is_byte_type_recv, 1, MPI_INT, 
-            MPI_LOR, comm_ptr, errflag);
-        
-    if(is_byte_type_recv)
+    else
     {
-        /* For MPI_BYTE, only check the numbers of bits */
-        type_len[0] = dtype_get_len(sendtype, sendcount);  
-        type_len[1] = dtype_get_len(recvtype, recvcount); 
-
-        /* Append op info to the type_len*/
-        if(op != NULL)
+        /* For inter comm, only verify the datatype signatures on local comm*/
+        type_sig sendsig, recvsig;
+        int i, is_equal;
+        uint64_t sig_compare_buf[4];
+     
+        mpi_errno = dtype_sig_generator_n(sendtype, &sendsig, sendcount);
+        
+        /* Append op info to the hash_value*/
+        if(op != NULL && HANDLE_IS_BUILTIN(*op))
         {
-            type_len[0] += (*op);
-            type_len[1] += (*op);
+            sendsig.hash_value += (*op);
+            recvsig.hash_value += (*op);
         }
             
-        mpi_errno = MPIR_Allreduce_equal(type_len, 2, MPI_UINT64_T, &is_equal, comm_ptr, errflag);
+        //printf("%d  %d  %d %s\n", comm_ptr->rank, comm_ptr->is_low_group, comm_ptr->local_size, comm_ptr->local_comm == NULL ? "null":"valid");
+        //printf("%d  %d \n", comm_ptr->rank, comm_ptr->is_low_group);
+        mpi_errno = dtype_sig_generator_n(recvtype, &recvsig, recvcount);
 
-        if(is_equal && (*errflag == MPIR_ERR_NONE) && type_len[0] == type_len[1])
-            return mpi_errno;
+        /* For unidirectional usage, verify low-gourp's send/recv with other's recv/send */
+        if(comm_ptr->is_low_group)
+        {
+            sig_compare_buf[0] = sendsig.hash_value;
+            sig_compare_buf[1] = sendsig.num_types;
+            sig_compare_buf[2] = recvsig.hash_value;
+            sig_compare_buf[3] = recvsig.num_types;
+        }
+        else
+        {
+            sig_compare_buf[0] = recvsig.hash_value;
+            sig_compare_buf[1] = recvsig.num_types;
+            sig_compare_buf[2] = sendsig.hash_value;
+            sig_compare_buf[3] = sendsig.num_types;
+        }
+
+        mpi_errno = MPIR_Allreduce_equal(sig_compare_buf, 4, MPI_UINT64_T, &is_equal, comm_ptr, errflag);
+
+
+        if(is_equal)
+        {
+            return mpi_errno; 
+        }
+
+        /* Check if MPI_BYTE being used */
+        /* type_len: 0, is_unidirectional; 1, send_type_len; 2, recv_type_len*/
+        uint64_t type_len[2];
+        int is_byte_type, is_byte_type_recv;
+
+
+        /* Check if at least one process using MPI_BYTE*/
+        is_byte_type = (sendtype == MPI_BYTE || recvtype == MPI_BYTE) ? 1 : 0;
+
+        mpi_errno = MPIR_Allreduce_impl(&is_byte_type, &is_byte_type_recv, 1, MPI_INT, 
+                MPI_LOR, comm_ptr, errflag);
+            
+        if(is_byte_type_recv)
+        {
+            /* For MPI_BYTE, only check the numbers of bits */
+            if(comm_ptr->is_low_group)
+            {
+                type_len[0] = dtype_get_len(sendtype, sendcount);           
+                type_len[1] = dtype_get_len(recvtype, recvcount); 
+            }
+            else
+            {
+                type_len[1] = dtype_get_len(recvtype, recvcount);           
+                type_len[1] = dtype_get_len(sendtype, sendcount); 
+            }
+
+
+            /* Append op info to the type_len*/
+            if(op != NULL && HANDLE_IS_BUILTIN(*op))
+            {
+                type_len[0] += (*op);
+                type_len[1] += (*op);
+            }
+
+            mpi_errno = MPIR_Allreduce_equal(type_len, 2, MPI_UINT64_T, &is_equal, comm_ptr, errflag);
+
+            if(is_equal)
+                return mpi_errno;
+        }
+
+        *errflag = MPI_ERR_ARG;
+        MPIR_ERR_SET(mpi_errno, MPI_ERR_ARG, "**collective_size_mismatch");
+        return mpi_errno;
     }
-
-    *errflag = MPI_ERR_ARG;
-    MPIR_ERR_SET(mpi_errno, MPI_ERR_ARG, "**collective_size_mismatch");
-    return mpi_errno;
 
 }
 
-//#define OFFSETOF1(_type, _field)    ((unsigned long) &(((_type *) 0)->_field))
+
 /*
 Collective length check for: Allgatherv.
 Input: sendcount, sendtype, recvcounts, recvtype, *comm_ptr, *errflag
@@ -719,178 +995,404 @@ int MPIR_Coll_len_check_allgatherv(MPI_Aint sendcount, MPI_Datatype sendtype, co
 		MPIR_Comm * comm_ptr, MPIR_Errflag_t * errflag)
 {
 	int mpi_errno = MPI_SUCCESS;
-    type_sig sendsig, recvsig;
-    int i, comm_size;
-    uint64_t temp_num_types;
-	uint64_t *local_check_arr;
-	int is_equal;
 
 	if (comm_ptr->comm_kind == MPIR_COMM_KIND__INTRACOMM) {
         /* intracommunicator */
+        type_sig sendsig, recvsig;
+        int i, comm_size;
+        uint64_t total_recv_count;
+        uint64_t *local_check_arr;
+        int is_equal;
+
+
         comm_size = MPIR_Comm_size(comm_ptr);
+        total_recv_count = 0;
+        local_check_arr = MPL_malloc(sizeof(uint64_t) * (comm_size + 4),MPL_MEM_OTHER);
+
+        /* construct the struct to compare */
+        /* It's MPI_AINT to uint64_t, so do copy one by one instead of MPIR_Localcopy()*/
+        for(i = 0; i < comm_size; ++i)
+        {
+            local_check_arr[i] = recvcounts[i];
+            total_recv_count += recvcounts[i];
+        }
+
+        mpi_errno = dtype_sig_generator_n(sendtype, &sendsig, sendcount);
+
+        mpi_errno = dtype_sig_generator_n(recvtype, &recvsig, 1);
+        recvsig.num_types = recvsig.num_types * total_recv_count;
+
+        /* For local_check_arr */ 
+        /* store recvcounts on pos 0 to comm_size-1,*/
+        /* store sendsig.hash_value on pos comm_size,*/
+        /* store recvsig.hash_value on pos comm_size+1,*/
+        /* store recvsig.num_types on pos comm_size+2,*/
+        /* store comparing result of sendcount to recvcounts[my_rank] on pos comm_size+3.*/
+        local_check_arr[comm_size] = sendsig.hash_value;
+        local_check_arr[comm_size+1] = recvsig.hash_value;
+        local_check_arr[comm_size+2] = recvsig.num_types;
+
+        // TODO: verify what's the rank of a process in a inter communicator?
+        // Now it should work correctly for intra communicators.
+        if(sendsig.hash_value == recvsig.hash_value &&
+            sendsig.num_types == recvcounts[comm_ptr->rank])
+        {
+            local_check_arr[comm_size+3] = 1ULL;            
+        }
+        else if(sendsig.num_types == 0)
+        {
+            /* For MPI_IN_PLACE usage*/
+            local_check_arr[comm_size+3] = 1ULL; 
+        }
+        else
+        {
+            local_check_arr[comm_size+3] = 0ULL;
+        }
+            
+        is_equal = 1;
+
+        mpi_errno = MPIR_Allreduce_equal(local_check_arr, comm_size+4, MPI_UINT64_T, &is_equal, comm_ptr, errflag);
+
+        MPL_free(local_check_arr);
+        if(is_equal)
+        {
+            /*
+            Please verify: do recvcount = sendcount * numprocs needed in alltoall and allgather?
+                */
+            if(!local_check_arr[comm_size+3])
+            {                
+                *errflag = MPI_ERR_ARG;
+                MPIR_ERR_SET(mpi_errno, MPI_ERR_ARG, "**collective_size_mismatch");
+                return mpi_errno;
+            }
+
+            return mpi_errno;
+        }
+        else
+        {
+            *errflag = MPI_ERR_ARG;
+            MPIR_ERR_SET(mpi_errno, MPI_ERR_ARG, "**collective_size_mismatch");
+            return mpi_errno;
+        }
 	}
 	else
 	{
+        int i, is_equal, is_equal_remote_group;
+        int remote_comm_size;
+        type_sig sendsig, recvsig;
+        type_sig * remote_sendsigs;
+
 		/* intercommunicator */
-		comm_size = comm_ptr->local_size + comm_ptr->remote_size;
-	}
+		remote_comm_size = comm_ptr->remote_size;
 
-	local_check_arr = MPL_malloc(sizeof(uint64_t) * (comm_size + 4),MPL_MEM_OTHER);
+        remote_sendsigs = (type_sig*)MPL_malloc(sizeof(type_sig) * remote_comm_size, MPL_MEM_OTHER);
 
-    /* construct the struct to compare */
-    /* It's MPI_AINT to uint64_t, so do copy one by one instead of MPIR_Localcopy()*/
-    for(i = 0; i < comm_size; ++i)
-    {
-    	local_check_arr[i] = recvcounts[i];
-    }
+        mpi_errno = dtype_sig_generator_n(sendtype, &sendsig, sendcount);
 
-    mpi_errno = dtype_sig_generator(sendtype, &sendsig);
-    sendsig.num_types = sendsig.num_types * sendcount;
+        mpi_errno = MPIR_Allgather_impl(&sendsig, 2, MPI_UINT64_T, remote_sendsigs, 2, MPI_UINT64_T,
+                comm_ptr, errflag);
 
-    mpi_errno = dtype_sig_generator(recvtype, &recvsig);
-    temp_num_types = recvsig.num_types;
-    recvsig.num_types = 0;
+        is_equal = 1;
+        if(recvcounts == NULL)
+        {
+            /* For unidirectional usage, verify if remote groups send nothing*/
+            for(i = 0; i < remote_comm_size; ++i)
+            {
+                if(remote_sendsigs[i].num_types != 0)
+                    is_equal = 0;
+            }
+        }
+        else
+        {
+            for(i = 0; i < remote_comm_size; ++i)
+            {
+                mpi_errno = dtype_sig_generator_n(recvtype, &recvsig, recvcounts[i]);
 
-    for(i = 0; i < comm_ptr->local_size; ++i)
-    {
-    	recvsig.num_types += recvcounts[i];
-    }
+                if(remote_sendsigs[i].hash_value != recvsig.hash_value || 
+                        remote_sendsigs[i].num_types != recvsig.num_types)
+                    is_equal = 0;
+            }
+        }
 
-    recvsig.num_types = recvsig.num_types * temp_num_types;
-    
-    /* For local_check_arr */ 
-    /* store recvcounts on pos 0 to comm_size-1,*/
-    /* store sendsig.hash_value on pos comm_size,*/
-    /* store recvsig.hash_value on pos comm_size+1,*/
-    /* store recvsig.num_types on pos comm_size+2,*/
-    /* store comparing result of sendcount to recvcounts[my_rank] on pos comm_size+3.*/
-    local_check_arr[comm_size] = sendsig.hash_value;
-    local_check_arr[comm_size+1] = recvsig.hash_value;
-    local_check_arr[comm_size+2] = recvsig.num_types;
+        mpi_errno = MPIR_Allreduce_equal(&is_equal, 1, MPI_INT, &is_equal_remote_group, comm_ptr, errflag);
 
-    // TODO: verify what's the rank of a process in a inter communicator?
-    // Now it should work correctly for intra communicators.
-    if(sendsig.hash_value == recvsig.hash_value &&
-    		sendsig.num_types == recvcounts[comm_ptr->rank])
-    	local_check_arr[comm_size+3] = 1ULL;
-    else
-    	local_check_arr[comm_size+3] = 0ULL;
+        MPL_free(remote_sendsigs);
+        if(is_equal && is_equal_remote_group)
+            return mpi_errno;
 
-    is_equal = 1;
-
-	mpi_errno = MPIR_Allreduce_equal(local_check_arr, comm_size+4, MPI_UINT64_T, &is_equal, comm_ptr, errflag);
-
-    if(is_equal && (*errflag == MPIR_ERR_NONE))
-    {
-    	/*
-    	Please verify: do recvcount = sendcount * numprocs needed in alltoall and allgather?
-    	 */
-    	if(!local_check_arr[comm_size+3])
-    	{
-    		*errflag = MPI_ERR_ARG;
-        	MPIR_ERR_SET(mpi_errno, MPI_ERR_ARG, "**collective_size_mismatch");
-        	return mpi_errno;
-    	}
-
-        return mpi_errno;
-    }
-    else
-    {
         *errflag = MPI_ERR_ARG;
         MPIR_ERR_SET(mpi_errno, MPI_ERR_ARG, "**collective_size_mismatch");
         return mpi_errno;
-    }
+	}
 }
 
 
 /*
-If typecount == 1, called by alltoallv. 
-Else, called by alltoallw.
+Collective length check for: Alltoallv
+Input: sendcounts, sendtype, recvcounts, recvtype, *comm_ptr, *errflag
+Output: error handle
  */
-int MPIR_Coll_len_check_alltoallvw(MPI_Aint* sendcount, MPI_Aint *sdispls, MPI_Datatype *sendtype, MPI_Aint *recvcount, 
-		MPI_Aint *rdispls, MPI_Datatype *recvtype, MPI_Aint typecount, MPIR_Comm * comm_ptr, MPIR_Errflag_t * errflag)
+int MPIR_Coll_len_check_alltoallv(const MPI_Aint* sendcounts, MPI_Datatype sendtype, const MPI_Aint *recvcounts, 
+		MPI_Datatype recvtype, bool is_mpi_inplace, MPIR_Comm * comm_ptr, MPIR_Errflag_t * errflag)
 {
 	int mpi_errno = MPI_SUCCESS;
-	type_sig *sendsigs, *recvsigs, temp_sig;
-	int i, is_sigs_equal, is_equal;
 
-	if(typecount != 1 && typecount != comm_ptr->local_size)
-	{
-		*errflag = MPIR_ERR_OTHER;
-        MPIR_ERR_SET2(mpi_errno, MPI_ERR_OTHER,
-            "**collective_size_mismatch",
-            "**collective_size_mismatch %d %d", typecount, comm_ptr->rank);
-        return mpi_errno;
-	}
+    if (comm_ptr->comm_kind == MPIR_COMM_KIND__INTRACOMM) {
+        /* Intracommunicator */
+        int comm_size, i, is_equal, is_sigs_equal;
+        type_sig *sendsigs, *cmp_recvsigs, temp_sig;
 
-	sendsigs = MPL_malloc(sizeof(type_sig) * comm_ptr->local_size, MPL_MEM_OTHER);
-	recvsigs = MPL_malloc(sizeof(type_sig) * comm_ptr->local_size, MPL_MEM_OTHER);
+        comm_size = comm_ptr->local_size;
 
-	if(typecount == 1)
-	{
-        mpi_errno = dtype_sig_generator(sendtype[0], &temp_sig);
+        sendsigs = MPL_malloc(sizeof(type_sig) * comm_size, MPL_MEM_OTHER);
+        cmp_recvsigs = MPL_malloc(sizeof(type_sig) * comm_size, MPL_MEM_OTHER);  
 
-		for(i = 0; i < comm_ptr->local_size; ++i)
-		{
-			sendsigs[i].hash_value = temp_sig.hash_value;
-			sendsigs[i].num_types = temp_sig.num_types * sendcount[i];
-		}
-	}
-	else
-	{
-		for(i = 0; i < comm_ptr->local_size; ++i)
-		{
-            mpi_errno = dtype_sig_generator(sendtype[i], &sendsigs[i]);
-			sendsigs[i].num_types = sendsigs[i].num_types * sendcount[i];
-		}
-	}
+        if(sendtype == MPI_DATATYPE_NULL || sendcounts == NULL || is_mpi_inplace)
+        {
+            /* For MPI_IN_PLACE */
+            mpi_errno = dtype_sig_generator_n(recvtype, &temp_sig, 1);
+
+            for(i = 0; i < comm_size; ++i)
+            {
+                sendsigs[i].hash_value = temp_sig.hash_value;
+                sendsigs[i].num_types = temp_sig.num_types * recvcounts[i];
+            }
+        }
+        else 
+        {
+            /* For normal usage */
+            mpi_errno = dtype_sig_generator_n(sendtype, &temp_sig, 1);
+
+            for(i = 0; i < comm_size; ++i)
+            {
+                sendsigs[i].hash_value = temp_sig.hash_value;
+                sendsigs[i].num_types = temp_sig.num_types * sendcounts[i];
+            }
+        }
 
 
-	mpi_errno = MPIR_Alltoall_impl(sendsigs, 2, MPI_UNSIGNED_LONG, recvsigs, 2, MPI_UNSIGNED_LONG, comm_ptr, errflag);
+        mpi_errno = MPIR_Alltoall_impl(sendsigs, 2, MPI_UINT64_T, cmp_recvsigs, 2, MPI_UINT64_T, comm_ptr, errflag);
 
-	is_sigs_equal = 1;
-	if(typecount == 1)
-	{
-        mpi_errno = dtype_sig_generator(recvtype[0], &temp_sig);
+        is_sigs_equal = 1;
 
-		for(i = 0; i < comm_ptr->local_size; ++i)
-		{
-			if(temp_sig.hash_value != recvsigs[i].hash_value || 
-					(temp_sig.num_types * recvcount[i]) != recvsigs[i].num_types)
-				is_sigs_equal = 0;
-		}
-	}
-	else
-	{
-		for(i = 0; i < comm_ptr->local_size; ++i)
-		{
-            mpi_errno = dtype_sig_generator(recvtype[i], &temp_sig);
+        mpi_errno = dtype_sig_generator_n(recvtype, &temp_sig, 1);
 
-			if(temp_sig.hash_value != recvsigs[i].hash_value || 
-					(temp_sig.num_types * recvcount[i]) != recvsigs[i].num_types)
-				is_sigs_equal = 0;
-		}
+        for(i = 0; i < comm_size; ++i)
+        {
+            if(cmp_recvsigs[i].hash_value != temp_sig.hash_value || 
+                    cmp_recvsigs[i].num_types != temp_sig.num_types * recvcounts[i])
+            {
+                is_sigs_equal = 0;
+            }
+        }
 
-	}
+        mpi_errno = MPIR_Allreduce_equal(&is_sigs_equal, 1, MPI_INT, &is_equal, comm_ptr, errflag);
 
-	MPL_free(sendsigs);
-	MPL_free(recvsigs);
+        MPL_free(sendsigs);
+        MPL_free(cmp_recvsigs); 
 
-	mpi_errno = MPIR_Allreduce_equal(&is_sigs_equal, 1, MPI_INT, &is_equal, comm_ptr, errflag);
 
-	if(is_equal && is_sigs_equal && (*errflag == MPIR_ERR_NONE))
-    {    
+        if(is_equal && is_sigs_equal)
+        {    
+            return mpi_errno;
+        }
+        else
+        {
+            /* TODO: for MPI_BYTE*/
+            *errflag = MPI_ERR_ARG;
+            MPIR_ERR_SET(mpi_errno, MPI_ERR_ARG, "**collective_size_mismatch");
+            return mpi_errno;
+        }
+
         return mpi_errno;
     }
     else
     {
-        *errflag = MPIR_ERR_OTHER;
-        MPIR_ERR_SET2(mpi_errno, MPI_ERR_OTHER,
-            "**collective_size_mismatch",
-            "**collective_size_mismatch %d %d", typecount, comm_ptr->rank);
+        /* Intercommunicator */
+        int rcomm_size, i, is_equal, is_sigs_equal;
+        type_sig *sendsigs, *cmp_recvsigs, temp_sig;
+
+        /* mpi_inplace only works in intra comm*/
+        MPIR_Assert(!is_mpi_inplace);
+
+        rcomm_size = comm_ptr->remote_size;
+
+        sendsigs = MPL_malloc(sizeof(type_sig) * rcomm_size, MPL_MEM_OTHER);
+        cmp_recvsigs = MPL_malloc(sizeof(type_sig) * rcomm_size, MPL_MEM_OTHER);     
+
+        mpi_errno = dtype_sig_generator_n(sendtype, &temp_sig, 1);
+
+        for(i = 0; i < rcomm_size; ++i)
+        {
+            sendsigs[i].hash_value = temp_sig.hash_value;
+            sendsigs[i].num_types = temp_sig.num_types * sendcounts[i];
+        }
+   
+        mpi_errno = MPIR_Alltoall_impl(sendsigs, 2, MPI_UINT64_T, cmp_recvsigs, 2, MPI_UINT64_T, comm_ptr, errflag);
+
+        is_sigs_equal = 1;
+
+        /* For alltoallv */
+        mpi_errno = dtype_sig_generator_n(recvtype, &temp_sig, 1);
+
+        for(i = 0; i < rcomm_size; ++i)
+        {
+            if(cmp_recvsigs[i].hash_value != temp_sig.hash_value || 
+                    cmp_recvsigs[i].num_types != temp_sig.num_types * recvcounts[i])
+            {
+                is_sigs_equal = 0;
+            }
+        }       
+
+        mpi_errno = MPIR_Allreduce_equal(&is_sigs_equal, 1, MPI_INT, &is_equal, comm_ptr, errflag);
+        
+        MPL_free(sendsigs);
+        MPL_free(cmp_recvsigs);
+
+        if(is_equal && is_sigs_equal)
+        {    
+            return mpi_errno;
+        }
+        else
+        {
+            /* TODO: for MPI_BYTE*/
+            *errflag = MPI_ERR_ARG;
+            MPIR_ERR_SET(mpi_errno, MPI_ERR_ARG, "**collective_size_mismatch");
+            return mpi_errno;            
+        }
+ 
         return mpi_errno;
     }
+}
 
-	return mpi_errno;
+/*
+Collective length check for: Alltoallw
+Input: sendcount, sendtype, recvcounts, recvtype, *comm_ptr, *errflag
+Output: error handle
+ */
+int MPIR_Coll_len_check_alltoallw(const MPI_Aint* sendcounts, const MPI_Datatype *sendtypes, const MPI_Aint *recvcounts, 
+		const MPI_Datatype *recvtypes, bool is_mpi_inplace, MPIR_Comm * comm_ptr, MPIR_Errflag_t * errflag)
+{
+	int mpi_errno = MPI_SUCCESS;
+
+    if (comm_ptr->comm_kind == MPIR_COMM_KIND__INTRACOMM) {
+        /* Intracommunicator */
+        int comm_size, i, is_equal, is_sigs_equal;
+        type_sig *sendsigs, *cmp_recvsigs, temp_sig;
+
+        comm_size = comm_ptr->local_size;
+
+        sendsigs = MPL_malloc(sizeof(type_sig) * comm_size, MPL_MEM_OTHER);
+        cmp_recvsigs = MPL_malloc(sizeof(type_sig) * comm_size, MPL_MEM_OTHER);  
+
+        if(sendtypes == NULL || sendcounts == NULL || is_mpi_inplace)
+        {
+            /* For MPI_IN_PLACE */
+            for(i = 0; i < comm_size; ++i)
+            {
+                mpi_errno = dtype_sig_generator_n(recvtypes[i], &temp_sig, 1);
+                sendsigs[i].hash_value = temp_sig.hash_value;
+                sendsigs[i].num_types = temp_sig.num_types * recvcounts[i];
+            }
+        }
+        else
+        {
+            /* For normal cases */
+            for(i = 0; i < comm_size; ++i)
+            {
+                mpi_errno = dtype_sig_generator_n(sendtypes[i], &sendsigs[i], sendcounts[i]);
+            }
+        }
+
+        mpi_errno = MPIR_Alltoall_impl(sendsigs, 2, MPI_UINT64_T, cmp_recvsigs, 2, MPI_UINT64_T, comm_ptr, errflag);
+
+        is_sigs_equal = 1;
+
+        for(i = 0; i < comm_size; ++i)
+        {
+            mpi_errno = dtype_sig_generator_n(recvtypes[i], &temp_sig, recvcounts[i]);
+
+            if(cmp_recvsigs[i].hash_value != temp_sig.hash_value || 
+                    cmp_recvsigs[i].num_types != temp_sig.num_types)
+            {
+                is_sigs_equal = 0;
+            }
+        }
+
+
+        mpi_errno = MPIR_Allreduce_equal(&is_sigs_equal, 1, MPI_INT, &is_equal, comm_ptr, errflag);
+
+        MPL_free(sendsigs);
+        MPL_free(cmp_recvsigs); 
+
+
+        if(is_equal && is_sigs_equal)
+        {    
+            return mpi_errno;
+        }
+        else
+        {
+            /* TODO: for MPI_BYTE*/
+            *errflag = MPI_ERR_ARG;
+            MPIR_ERR_SET(mpi_errno, MPI_ERR_ARG, "**collective_size_mismatch");
+            return mpi_errno;
+        }
+
+        return mpi_errno;
+    }
+    else
+    {
+        /* Intercommunicator */
+        int comm_size, i, is_equal, is_sigs_equal;
+        type_sig *sendsigs, *cmp_recvsigs, temp_sig;
+
+        /* mpi_inplace only works in intra comm*/
+        MPIR_Assert(!is_mpi_inplace);
+
+        comm_size = comm_ptr->remote_size;
+
+        sendsigs = MPL_malloc(sizeof(type_sig) * comm_size, MPL_MEM_OTHER);
+        cmp_recvsigs = MPL_malloc(sizeof(type_sig) * comm_size, MPL_MEM_OTHER);     
+
+        for(i = 0; i < comm_size; ++i)
+        {
+            mpi_errno = dtype_sig_generator_n(sendtypes[i], &sendsigs[i], sendcounts[i]);
+        }
+
+
+        mpi_errno = MPIR_Alltoall_impl(sendsigs, 2, MPI_UINT64_T, cmp_recvsigs, 2, MPI_UINT64_T, comm_ptr, errflag);
+
+        is_sigs_equal = 1;
+
+        for(i = 0; i < comm_size; ++i)
+        {
+            mpi_errno = dtype_sig_generator_n(recvtypes[i], &temp_sig, recvcounts[i]);
+
+            if(cmp_recvsigs[i].hash_value != temp_sig.hash_value || 
+                    cmp_recvsigs[i].num_types != temp_sig.num_types )
+            {
+                is_sigs_equal = 0;
+            }
+        }
+        
+        mpi_errno = MPIR_Allreduce_equal(&is_sigs_equal, 1, MPI_INT, &is_equal, comm_ptr, errflag);
+        
+        MPL_free(sendsigs);
+        MPL_free(cmp_recvsigs);
+
+        if(is_equal && is_sigs_equal)
+        {    
+            return mpi_errno;
+        }
+        else
+        {
+            /* TODO: for MPI_BYTE*/
+            *errflag = MPI_ERR_ARG;
+            MPIR_ERR_SET(mpi_errno, MPI_ERR_ARG, "**collective_size_mismatch");
+            return mpi_errno;            
+        }
+ 
+        return mpi_errno;
+    }
 }
 
