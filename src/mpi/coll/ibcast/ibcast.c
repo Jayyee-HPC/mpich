@@ -401,6 +401,13 @@ int MPIR_Ibcast(void *buffer, MPI_Aint count, MPI_Datatype datatype, int root, M
 {
     int mpi_errno = MPI_SUCCESS;
 
+#ifdef HAVE_ERROR_CHECKING
+    MPIR_Errflag_t errflag = MPIR_ERR_NONE;
+    mpi_errno = MPIR_Coll_len_check_scatter(count, datatype, root, NULL, comm_ptr, &errflag);
+    if(mpi_errno != MPI_SUCCESS)
+      return mpi_errno; 
+#endif //def HAVE_ERROR_CHECKING 
+
     if ((MPIR_CVAR_DEVICE_COLLECTIVES == MPIR_CVAR_DEVICE_COLLECTIVES_all) ||
         ((MPIR_CVAR_DEVICE_COLLECTIVES == MPIR_CVAR_DEVICE_COLLECTIVES_percoll) &&
          MPIR_CVAR_IBCAST_DEVICE_COLLECTIVE)) {

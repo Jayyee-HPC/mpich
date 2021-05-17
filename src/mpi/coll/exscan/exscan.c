@@ -47,6 +47,12 @@ int MPIR_Exscan_allcomm_auto(const void *sendbuf, void *recvbuf, MPI_Aint count,
 {
     int mpi_errno = MPI_SUCCESS;
 
+#ifdef HAVE_ERROR_CHECKING
+    mpi_errno = MPIR_Coll_len_check_scatter(count, datatype, 0, &op, comm_ptr, errflag);
+    if(mpi_errno != MPI_SUCCESS)
+      return mpi_errno; 
+#endif //def HAVE_ERROR_CHECKING 
+
     MPIR_Csel_coll_sig_s coll_sig = {
         .coll_type = MPIR_CSEL_COLL_TYPE__EXSCAN,
         .comm_ptr = comm_ptr,

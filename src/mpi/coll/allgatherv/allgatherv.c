@@ -212,6 +212,14 @@ int MPIR_Allgatherv(const void *sendbuf, MPI_Aint sendcount, MPI_Datatype sendty
 {
     int mpi_errno = MPI_SUCCESS;
 
+#ifdef HAVE_ERROR_CHECKING
+    mpi_errno = MPIR_Coll_len_check_allgatherv(sendcount, sendtype, recvcounts, recvtype, 
+		    comm_ptr, errflag);
+
+    if(mpi_errno != MPI_SUCCESS)
+        return mpi_errno; 
+#endif //def HAVE_ERROR_CHECKING 
+
     if ((MPIR_CVAR_DEVICE_COLLECTIVES == MPIR_CVAR_DEVICE_COLLECTIVES_all) ||
         ((MPIR_CVAR_DEVICE_COLLECTIVES == MPIR_CVAR_DEVICE_COLLECTIVES_percoll) &&
          MPIR_CVAR_ALLGATHERV_DEVICE_COLLECTIVE)) {

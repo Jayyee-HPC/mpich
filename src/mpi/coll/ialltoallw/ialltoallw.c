@@ -305,6 +305,16 @@ int MPIR_Ialltoallw(const void *sendbuf, const MPI_Aint sendcounts[], const MPI_
 {
     int mpi_errno = MPI_SUCCESS;
 
+#ifdef HAVE_ERROR_CHECKING
+    MPIR_Errflag_t errflag = MPIR_ERR_NONE;
+
+    MPIR_Coll_len_check_alltoallw(sendcounts, sendtypes, recvcounts, 
+		    recvtypes, sendbuf == MPI_IN_PLACE, comm_ptr, &errflag); 
+
+    if(mpi_errno != MPI_SUCCESS)
+        return mpi_errno; 
+#endif //def HAVE_ERROR_CHECKING 
+
     if ((MPIR_CVAR_DEVICE_COLLECTIVES == MPIR_CVAR_DEVICE_COLLECTIVES_all) ||
         ((MPIR_CVAR_DEVICE_COLLECTIVES == MPIR_CVAR_DEVICE_COLLECTIVES_percoll) &&
          MPIR_CVAR_IALLTOALLW_DEVICE_COLLECTIVE)) {

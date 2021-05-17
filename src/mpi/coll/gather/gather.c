@@ -189,6 +189,25 @@ int MPIR_Gather(const void *sendbuf, MPI_Aint sendcount, MPI_Datatype sendtype,
 {
     int mpi_errno = MPI_SUCCESS;
 
+#ifdef HAVE_ERROR_CHECKING
+    if(comm_ptr->comm_kind == MPIR_COMM_KIND__INTRACOMM){
+        if(root == comm_ptr->rank)
+            mpi_errno = MPIR_Coll_len_check_scatter(recvcount, recvtype, root, NULL, comm_ptr, errflag);
+        else
+            mpi_errno = MPIR_Coll_len_check_scatter(sendcount, sendtype, root, NULL, comm_ptr, errflag);
+    }
+    else
+    {
+        if(root == MPI_ROOT)
+            mpi_errno = MPIR_Coll_len_check_scatter(recvcount, recvtype, root, NULL, comm_ptr, errflag);
+        else
+            mpi_errno = MPIR_Coll_len_check_scatter(sendcount, sendtype, root, NULL, comm_ptr, errflag);
+    }
+
+    if(mpi_errno != MPI_SUCCESS)
+      return mpi_errno;
+#endif //def HAVE_ERROR_CHECKING
+
     if ((MPIR_CVAR_DEVICE_COLLECTIVES == MPIR_CVAR_DEVICE_COLLECTIVES_all) ||
         ((MPIR_CVAR_DEVICE_COLLECTIVES == MPIR_CVAR_DEVICE_COLLECTIVES_percoll) &&
          MPIR_CVAR_GATHER_DEVICE_COLLECTIVE)) {

@@ -233,6 +233,13 @@ int MPIR_Allreduce(const void *sendbuf, void *recvbuf, MPI_Aint count, MPI_Datat
     void *host_sendbuf;
     void *host_recvbuf;
 
+#ifdef HAVE_ERROR_CHECKING
+    mpi_errno = MPIR_Coll_len_check_allreduce(count, datatype, &op, comm_ptr, errflag);
+
+    if(mpi_errno != MPI_SUCCESS)
+        return mpi_errno; 
+#endif //def HAVE_ERROR_CHECKING 
+
     MPIR_Coll_host_buffer_alloc(sendbuf, recvbuf, count, datatype, &host_sendbuf, &host_recvbuf);
     if (host_sendbuf)
         sendbuf = host_sendbuf;

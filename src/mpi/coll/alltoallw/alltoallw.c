@@ -61,7 +61,7 @@ int MPIR_Alltoallw_allcomm_auto(const void *sendbuf, const MPI_Aint sendcounts[]
                                 MPIR_Comm * comm_ptr, MPIR_Errflag_t * errflag)
 {
     int mpi_errno = MPI_SUCCESS;
-
+   
     MPIR_Csel_coll_sig_s coll_sig = {
         .coll_type = MPIR_CSEL_COLL_TYPE__ALLTOALLW,
         .comm_ptr = comm_ptr,
@@ -190,6 +190,14 @@ int MPIR_Alltoallw(const void *sendbuf, const MPI_Aint sendcounts[], const MPI_A
                    MPIR_Comm * comm_ptr, MPIR_Errflag_t * errflag)
 {
     int mpi_errno = MPI_SUCCESS;
+
+#ifdef HAVE_ERROR_CHECKING
+    mpi_errno = MPIR_Coll_len_check_alltoallw(sendcounts, sendtypes, recvcounts, 
+		    recvtypes, sendbuf == MPI_IN_PLACE, comm_ptr, errflag); 
+
+    if(mpi_errno != MPI_SUCCESS)
+        return mpi_errno; 
+#endif //def HAVE_ERROR_CHECKING  
 
     if ((MPIR_CVAR_DEVICE_COLLECTIVES == MPIR_CVAR_DEVICE_COLLECTIVES_all) ||
         ((MPIR_CVAR_DEVICE_COLLECTIVES == MPIR_CVAR_DEVICE_COLLECTIVES_percoll) &&
