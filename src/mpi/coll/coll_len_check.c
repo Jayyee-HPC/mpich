@@ -444,48 +444,172 @@ int MPIR_Coll_len_check_scatterv(MPI_Aint sendcount, MPI_Datatype sendtype, cons
 
     if (comm_ptr->comm_kind == MPIR_COMM_KIND__INTRACOMM) {
         /* intracommunicator */
-	    type_sig sig, *rsigs, temp_sig;
+	    type_sig sig, temp_sig;
         int comm_size;
 	    int i, is_equal;
 	    uint64_t temp_num_types;
+        uint64_t compare_buff[3], *rsigs;
+        uint64_t temp_root, *rsigs_from_root;
         
         comm_size = comm_ptr->local_size;
 
-        rsigs = (type_sig *)MPL_malloc(sizeof(type_sig) * comm_size, MPL_MEM_OTHER);
+        rsigs = (uint64_t *)MPL_malloc(sizeof(uint64_t) * 3 * comm_size, MPL_MEM_OTHER);
 
         mpi_errno = dtype_sig_generator_n(sendtype, &sig, sendcount);
         
         /* Append root info to the hash_value*/
-        sig.hash_value += root;
+        //sig.hash_value += root;
+        compare_buff[0] = sig.hash_value;
+        compare_buff[1] = sig.num_types;
+        compare_buff[2] = root;
 
-        /* Please verify: root mismatch may impact this function, is extra root confirmation needed?*/
+        /* Please verify: root mismatch may impact this function, is extra root confirmation needed? */
+        /* Using p0 as a temporary root: if not equal, bcast uneuql. */
+        /* If equal, p0 request recv type signatures from root. Then p0 bcast the result */
+	    mpi_errno = MPIR_Gather_impl(compare_buff, 3, MPI_UINT64_T, rsigs, 3, MPI_UINT64_T, 0, comm_ptr, errflag);
 
-	    mpi_errno = MPIR_Gather_impl(&sig, 2, MPI_UINT64_T, rsigs, 2, MPI_UINT64_T, root, comm_ptr, errflag);
+        if (comm_ptr->rank == 0)
+        {
+            /* First check if root matches */
+            is_equal = 1;
+            temp_root = root;
 
-	    if(root == comm_ptr->rank){
-	    	is_equal = 1;
-
-            for(i = 0; i < comm_size; ++i)
-            {	 
-                mpi_errno = dtype_sig_generator_n(recvtype, &temp_sig, recvcounts[i]); 
-
-                /* Append root info to the hash_value*/
-                temp_sig.hash_value += root;
-
-                if(root == i && (sendtype == MPI_DATATYPE_NULL || sendcount <= 0))
-                {
-                    /* In case MPI_IN_PLACE in igatherv */
-                    /* Do nothing */      
-                }
-                else if(temp_sig.hash_value != rsigs[i].hash_value || temp_sig.num_types != rsigs[i].num_types)
+            for(i = 1; i < comm_size; ++i)
+            {
+                if(rsigs[3*i + 2] != temp_root)
                 {
                     is_equal = 0;
                     break;
-                }	    			
-            }           
-	    }
+                }
+            }
 
-	    mpi_errno = MPIR_Bcast_impl(&is_equal, 1, MPI_INT, root, comm_ptr, errflag);
+            if(!is_equal){
+                /* bcast unequal */
+                
+            }
+            else if(comm_ptr->rank == root)
+            {
+                /* root is p0 */
+                
+                for(i = 0; i < comm_size; ++i)
+                {	 
+                    mpi_errno = dtype_sig_generator_n(recvtype, &temp_sig, recvcounts[i]); 
+
+
+                    if(root == i && (sendtype == MPI_DATATYPE_NULL || sendcount <= 0))
+                    {
+                        /* In case MPI_IN_PLACE in igatherv */
+                        /* Do nothing */      
+                    }
+                    else if(temp_sig.hash_value != rsigs[3*i] || temp_sig.num_types != rsigs[3*i + 1])
+                    {
+                        is_equal = 0;
+                        break;
+                    }	    			
+                }  
+
+            }
+            else
+            {
+                /* obtain recv type signatures from root */
+                rsigs_from_root = (uint64_t *)MPL_malloc(sizeof(uint64_t) * 3 * comm_size, MPL_MEM_OTHER);
+
+                MPIR_Request *rreq  = NULL;
+                mpi_errno = MPID_Irecv(rsigs_from_root, comm_size*3, MPI_UINT64_T, root, 0, comm_ptr,
+                       MPIR_CONTEXT_INTRA_PT2PT, &rreq);
+
+                if(!MPIR_Request_is_complete(rreq))
+                {
+                    MPID_Progress_state progress_state;
+                    MPID_Progress_start(&progress_state);
+
+                    while (!MPIR_Request_is_complete(rreq))
+                    {
+                        mpi_errno = MPID_Progress_wait(&progress_state);
+
+                        if (mpi_errno != MPI_SUCCESS) {
+                            /* --BEGIN ERROR HANDLING-- */
+                            MPID_Progress_end(&progress_state);
+                            //goto fn_fail;
+                            break;
+                            /* --END ERROR HANDLING-- */
+                        }
+
+                        if (unlikely(MPIR_Request_is_anysrc_mismatched(rreq))) {
+                            /* --BEGIN ERROR HANDLING-- */
+                            mpi_errno = MPIR_Request_handle_proc_failed(rreq);
+                            /* --END ERROR HANDLING-- */
+                        }
+                        MPID_Progress_end(&progress_state);
+                    }
+                }
+
+                for(i = 0; i < comm_size; ++i)
+                {	 
+                    if(root == i && (rsigs[3*i + 1] <= 0))
+                    {
+                    /* In case MPI_IN_PLACE in igatherv */
+                    /* Do nothing */      
+                    }
+                    else if(rsigs_from_root[3*i]  != rsigs[3*i] || 
+                            rsigs_from_root[3*i+1]  != rsigs[3*i+1])
+                    {
+                        is_equal = 0;
+                        break;
+                    }	    			
+                }
+
+                mpi_errno = rreq->status.MPI_ERROR;
+                MPIR_Request_free(rreq); 
+
+                MPL_free(rsigs_from_root);
+            }
+        }
+        else
+        {
+            if(root == comm_ptr->rank)
+            {
+                for(i = 0; i < comm_size; ++i)
+                {	 
+                    mpi_errno = dtype_sig_generator_n(recvtype, &temp_sig, recvcounts[i]); 
+
+                    /* root puts recv type signature in resigs*/
+                    rsigs[i*3] = temp_sig.hash_value;
+                    rsigs[i*3 + 1] = temp_sig.num_types;
+                    rsigs[i*3 + 2] = root;
+                }
+
+                MPIR_Request *sreq  = NULL;
+                mpi_errno = MPID_Isend(rsigs, comm_size*3, MPI_UINT64_T, 0, 0, comm_ptr,
+                       MPIR_CONTEXT_INTRA_PT2PT, &sreq); 
+
+                if(!MPIR_Request_is_complete(sreq))
+                {
+                    MPID_Progress_state progress_state;
+                    MPID_Progress_start(&progress_state);
+
+                    while (!MPIR_Request_is_complete(sreq))
+                    {
+                        mpi_errno = MPID_Progress_wait(&progress_state);
+
+                        if (mpi_errno != MPI_SUCCESS) {
+                            /* --BEGIN ERROR HANDLING-- */
+                            MPID_Progress_end(&progress_state);
+                            //goto fn_fail;
+                            break;
+                            /* --END ERROR HANDLING-- */
+                        }
+
+                        MPID_Progress_end(&progress_state);
+                    }
+                }
+
+                mpi_errno = sreq->status.MPI_ERROR;
+                MPIR_Request_free(sreq); 
+            }
+        }
+
+	    mpi_errno = MPIR_Bcast_impl(&is_equal, 1, MPI_INT, 0, comm_ptr, errflag);
 
         if(rsigs != NULL)
             MPL_free(rsigs);
@@ -496,21 +620,25 @@ int MPIR_Coll_len_check_scatterv(MPI_Aint sendcount, MPI_Datatype sendtype, cons
 	    {
             if(*errflag == MPIR_ERR_NONE){
             	/* Check if MPI_BYTE being used */
+                /* TODO: fix cases in which root mismatch */
 				uint64_t type_len, r_type_lens[comm_size], temp_type_len;
 				int is_byte_type, is_byte_type_recv;
 
 				/* Check if at least one process using MPI_BYTE*/
 				is_byte_type = (sendtype == MPI_BYTE || recvtype == MPI_BYTE) ? 1 : 0;
+
 				mpi_errno = MPIR_Allreduce_impl(&is_byte_type, &is_byte_type_recv, 1, MPI_INT, 
 						MPI_LOR, comm_ptr, errflag);
-				 
+
+                mpi_errno = MPIR_Allreduce_equal(&is_byte_type, 1, MPI_INT, &is_byte_type_recv, comm_ptr, errflag);
+
 				if(is_byte_type_recv)
 				{
 					/* For MPI_BYTE, only check the numbers of bits */
 					type_len = dtype_get_len(sendtype, sendcount);  
 
-                    /* Append root info to the type length*/
-                    type_len += root;
+                    /* Append root info to detect root mismatch*/
+                    is_byte_type += root;
 
                     mpi_errno = MPIR_Gather_impl(&type_len, 1, MPI_UINT64_T, r_type_lens, 1, MPI_UINT64_T, root, comm_ptr, errflag);
 
