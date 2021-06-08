@@ -740,14 +740,14 @@ do {                                                                            
 #define HASH_ADD_TO_BKT(head,addhh,class)                                        \
 do {                                                                             \
  head.count++;                                                                   \
+  if ((head.count >= ((head.expand_mult+1U) * HASH_BKT_CAPACITY_THRESH))          \
+     && ((addhh)->tbl->noexpand != 1U)) {                                        \
+       HASH_EXPAND_BUCKETS((addhh)->tbl, class);                                 \
+ }                                                                               \
  (addhh)->hh_next = head.hh_head;                                                \
  (addhh)->hh_prev = NULL;                                                        \
  if (head.hh_head != NULL) { (head).hh_head->hh_prev = (addhh); }                \
  (head).hh_head=addhh;                                                           \
- if ((head.count >= ((head.expand_mult+1U) * HASH_BKT_CAPACITY_THRESH))          \
-     && ((addhh)->tbl->noexpand != 1U)) {                                        \
-       HASH_EXPAND_BUCKETS((addhh)->tbl, class);                                 \
- }                                                                               \
 } while (0)
 
 /* remove an item from a given bucket */

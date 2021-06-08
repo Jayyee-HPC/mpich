@@ -127,6 +127,10 @@ int MPII_init_local_proc_attrs(int *p_thread_required)
     /* Set the number of tag bits. The device may override this value. */
     MPIR_Process.tag_bits = MPIR_TAG_BITS_DEFAULT;
 
+    /* Set init heartbeat info*/
+    MPIR_Process.heartbeat_t.next = NULL;
+    MPIR_Process.heartbeat_t.key = 0;
+    MPIR_Process.heartbeat_t.value = 0;
     /* Init communicator hints */
     MPIR_Comm_hint_init();
 

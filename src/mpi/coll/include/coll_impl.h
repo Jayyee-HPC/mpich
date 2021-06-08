@@ -101,4 +101,23 @@ void MPIR_Coll_host_buffer_free(void *host_sendbuf, void *host_recvbuf);
 void MPIR_Coll_host_buffer_swap_back(void *host_sendbuf, void *host_recvbuf, void *in_recvbuf,
                                      MPI_Aint count, MPI_Datatype datatype, MPIR_Request * request);
 
+/* functions for heartbeat error checking */
+#define MAXVALLEN 1024
+#define MAXKEYLEN 32
+#define KVSNAMELEN 256
+/* Coll heartbeat sturct */
+typedef struct coll_hb_info
+{
+    char kvsname[KVSNAMELEN];
+    char key[MAXKEYLEN];
+    char value[MAXVALLEN];
+    char op_name[MAXKEYLEN];
+    uint64_t key_uint64;
+    uint64_t value_uint64;
+} coll_hb_info;
+
+int MPIR_Coll_heartbeat_put(coll_hb_info * op_info, MPIR_Comm * comm_ptr);
+int MPIR_Coll_heartbeat_get( coll_hb_info * op_info, char key[], char value[], int * bufsize);
+int MPIR_Coll_heartbeat_t_remove(coll_hb_info * op_info, MPIR_Comm * comm_ptr);
+
 #endif /* COLL_IMPL_H_INCLUDED */

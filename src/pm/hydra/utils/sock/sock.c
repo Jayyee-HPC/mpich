@@ -194,6 +194,7 @@ HYD_status HYDU_sock_read(int fd, void *buf, int maxlen, int *recvd, int *closed
     while (1) {
         do {
             tmp = read(fd, (char *) buf + *recvd, maxlen - *recvd);
+            //printf("SR %s\n", (char *) buf + *recvd);
             if (tmp < 0) {
                 if (errno == ECONNRESET || fd == STDIN_FILENO) {
                     /* If the remote end closed the socket or if we
@@ -241,6 +242,7 @@ HYD_status HYDU_sock_write(int fd, const void *buf, int maxlen, int *sent, int *
     *closed = 0;
     while (1) {
         tmp = write(fd, (char *) buf + *sent, maxlen - *sent);
+        //printf("SW %s\n", (char *) buf + *sent);
         if (tmp <= 0) {
             if (errno == EAGAIN) {
                 if (flag == HYDU_SOCK_COMM_NONE)
@@ -395,6 +397,7 @@ HYD_status HYDU_sock_forward_stdio(int in, int out, int *closed)
 
     if (fwd_hash->buf_count) {
         /* there is data in the buffer, send it out first */
+
         status =
             HYDU_sock_write(out, fwd_hash->buf + fwd_hash->buf_offset, fwd_hash->buf_count,
                             &count, closed, HYDU_SOCK_COMM_MSGWAIT);
@@ -420,6 +423,7 @@ HYD_status HYDU_sock_forward_stdio(int in, int out, int *closed)
         }
     }
 
+    
   fn_exit:
     HYDU_FUNC_EXIT();
     return status;

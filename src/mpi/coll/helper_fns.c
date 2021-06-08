@@ -63,7 +63,7 @@ int MPIC_Wait(MPIR_Request * request_ptr, MPIR_Errflag_t * errflag)
 
     mpi_errno = MPID_Wait(request_ptr, MPI_STATUS_IGNORE);
     MPIR_ERR_CHECK(mpi_errno);
-
+    //If recv, remove global entry in hb table
     if (request_ptr->kind == MPIR_REQUEST_KIND__RECV)
         MPIR_Process_status(&request_ptr->status, errflag);
 
@@ -183,13 +183,14 @@ int MPIC_Recv(void *buf, MPI_Aint count, MPI_Datatype datatype, int source, int 
     if (status == MPI_STATUS_IGNORE)
         status = &mystatus;
 
+    //TODO: register global hb table
     mpi_errno = MPID_Recv(buf, count, datatype, source, tag, comm_ptr,
                           context_offset, status, &request_ptr);
     MPIR_ERR_CHECK(mpi_errno);
     if (request_ptr) {
         mpi_errno = MPIC_Wait(request_ptr, errflag);
         MPIR_ERR_CHECK(mpi_errno);
-
+        //TODO: unregister global hb table
         *status = request_ptr->status;
         mpi_errno = status->MPI_ERROR;
         MPIR_Request_free(request_ptr);
@@ -584,6 +585,7 @@ int MPIC_Irecv(void *buf, MPI_Aint count, MPI_Datatype datatype, int source,
     context_id = (comm_ptr->comm_kind == MPIR_COMM_KIND__INTRACOMM) ?
         MPIR_CONTEXT_INTRA_COLL : MPIR_CONTEXT_INTER_COLL;
 
+    //TODO: resigter global hb table
     mpi_errno = MPID_Irecv(buf, count, datatype, source, tag, comm_ptr, context_id, request_ptr);
     MPIR_ERR_CHECK(mpi_errno);
 

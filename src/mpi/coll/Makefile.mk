@@ -64,7 +64,8 @@ AM_CPPFLAGS += -I$(top_srcdir)/src/mpi/coll/include/
 
 mpi_core_sources += \
     src/mpi/coll/helper_fns.c     \
-    src/mpi/coll/nbcutil.c
+    src/mpi/coll/nbcutil.c        \
+    src/mpi/coll/coll_heartbeat.c
 
 noinst_HEADERS +=                    \
     src/mpi/coll/include/coll_impl.h

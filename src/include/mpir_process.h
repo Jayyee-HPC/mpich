@@ -23,12 +23,23 @@ struct MPIR_Session {
     void *dummy;                /* hack to insure pointer alignment (for MPIR_Handle_common access) */
 };
 
+struct MPIR_Heartbeat_t {
+    uint64_t key;
+    uint64_t value;
+    MPIR_Comm *comm;
+    struct MPIR_Heartbeat_t *next;                /* hack to insure pointer alignment (for MPIR_Handle_common access) */
+}MPIR_Heartbeat_t;
+
 extern MPIR_Session MPIR_Session_direct[];
 extern MPIR_Object_alloc_t MPIR_Session_mem;
 
 typedef struct MPIR_Process_t {
     MPL_atomic_int_t mpich_state;       /* Need use atomics due to MPI_Initialized() etc.
                                          * thread-safe per MPI-3.1.  See MPI-Forum ticket 357 */
+
+                                            //TODO: Global recv uhash table 
+                                            //key (op id, src rank, comm id)
+                                            //value 
 
     /* Fields to be initialized by MPIR_pmi_init() */
     int has_parent;
@@ -77,6 +88,8 @@ typedef struct MPIR_Process_t {
      * to specify the kind (comm,file,win) */
     void (*cxx_call_errfn) (int, int *, int *, void (*)(void));
 #endif                          /* HAVE_CXX_BINDING */
+
+    struct MPIR_Heartbeat_t heartbeat_t;
 } MPIR_Process_t;
 extern MPIR_Process_t MPIR_Process;
 

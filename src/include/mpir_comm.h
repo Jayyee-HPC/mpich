@@ -204,6 +204,7 @@ struct MPIR_Comm {
      */
     int tainted;
 
+    int hb_counter;             /* used by coll heartbeat service. +1 each collective op called. */
 
     int hints[MPIR_COMM_HINT_MAX];      /* Hints to the communicator
                                          * use int array for fast access */

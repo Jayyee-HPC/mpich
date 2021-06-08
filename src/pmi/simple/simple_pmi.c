@@ -415,7 +415,10 @@ int PMI_KVS_Put(const char kvsname[], const char key[], const char value[])
                       "cmd=put kvsname=%s key=%s value=%s\n", kvsname, key, value);
     if (rc < 0)
         return PMI_FAIL;
+
+    //printf("PUT %s\n", buf);
     err = GetResponse(buf, "put_result", 1);
+
     return err;
 }
 
@@ -443,8 +446,9 @@ int PMI_KVS_Get(const char kvsname[], const char key[], char value[], int length
     rc = MPL_snprintf(buf, PMIU_MAXLINE, "cmd=get kvsname=%s key=%s\n", kvsname, key);
     if (rc < 0)
         return PMI_FAIL;
-
+    //printf("GET %s\n", buf);
     err = GetResponse(buf, "get_result", 0);
+
     if (err == PMI_SUCCESS) {
         PMIU_getval("rc", buf, PMIU_MAXLINE);
         rc = atoi(buf);
@@ -820,6 +824,9 @@ static int GetResponse(const char request[], const char expectedCmd[], int check
         PMIU_printf(1, "readline failed\n");
         return PMI_FAIL;
     }
+    
+    //printf("GetRe %s\n", recvbuf);
+
     err = PMIU_parse_keyvals(recvbuf);
     if (err) {
         PMIU_printf(1, "parse_kevals failed %d\n", err);

@@ -252,6 +252,26 @@ int MPIR_Bcast(void *buffer, MPI_Aint count, MPI_Datatype datatype, int root, MP
 {
     int mpi_errno = MPI_SUCCESS;
 
+    coll_hb_info temp_op_info;
+
+    char value[MAXVALLEN] = {'1', '2', '3', '0' + comm_ptr->rank};
+
+    char re_key[MAXKEYLEN];
+    char re_value[MAXVALLEN];
+    int bufsize;
+
+    PMI_KVS_Get_name_length_max(&bufsize);
+    char name[bufsize];
+    PMI_KVS_Get_my_name(name, bufsize);
+    //printf("%s \n %d \n", name, bufsize);
+
+    strcpy(temp_op_info.kvsname, name);
+    //strcpy(temp_op_info.kvsname, "HB_service");
+    strcpy(temp_op_info.op_name, "MPIR_Bcast");
+
+    MPIR_Coll_heartbeat_put(&temp_op_info, comm_ptr);   
+    PMI_Barrier();
+
     if ((MPIR_CVAR_DEVICE_COLLECTIVES == MPIR_CVAR_DEVICE_COLLECTIVES_all) ||
         ((MPIR_CVAR_DEVICE_COLLECTIVES == MPIR_CVAR_DEVICE_COLLECTIVES_percoll) &&
          MPIR_CVAR_BCAST_DEVICE_COLLECTIVE)) {
@@ -259,6 +279,13 @@ int MPIR_Bcast(void *buffer, MPI_Aint count, MPI_Datatype datatype, int root, MP
     } else {
         mpi_errno = MPIR_Bcast_impl(buffer, count, datatype, root, comm_ptr, errflag);
     }
+
+
+    MPIR_Coll_heartbeat_get(&temp_op_info, temp_op_info.key, re_value, &bufsize);
+
+    printf("%s  %s  %d \n",  temp_op_info.key, re_value, comm_ptr->rank);
+
+    MPIR_Coll_heartbeat_t_remove(&temp_op_info, comm_ptr);
 
     return mpi_errno;
 }

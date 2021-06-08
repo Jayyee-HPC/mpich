@@ -79,6 +79,8 @@ static HYD_status send_cmd_upstream(const char *start, int fd, int num_args, cha
 
     debug("forwarding command (%s) upstream\n", buf);
 
+    //printf("Server %s\n", buf);
+
     status = HYDU_sock_write(HYD_pmcd_pmip.upstream.control, buf, hdr.buflen, &sent, &closed,
                              HYDU_SOCK_COMM_MSGWAIT);
     HYDU_ERR_POP(status, "unable to send PMI command upstream\n");
@@ -133,8 +135,13 @@ static HYD_status cache_put_flush(int fd)
     status = send_cmd_upstream("cmd=put ", fd, cache_put.keyval_len, cache_put.keyval);
     HYDU_ERR_POP(status, "error sending command upstream\n");
 
+    
     for (i = 0; i < cache_put.keyval_len; i++)
+    {
+      //printf("CP len %d::%d %s \n", cache_put.keyval_len, i, cache_put.keyval[i]);
+
         MPL_free(cache_put.keyval[i]);
+    }
     cache_put.keyval_len = 0;
 
   fn_exit:
@@ -395,6 +402,8 @@ static HYD_status fn_get(int fd, char *args[])
     key = HYD_pmcd_pmi_find_token_keyval(tokens, token_count, "key");
     HYDU_ERR_CHKANDJUMP(status, key == NULL, HYD_INTERNAL_ERROR, "unable to find token: key\n");
 
+    
+
     if (!strcmp(key, "PMI_process_mapping")) {
         HYD_STRING_STASH_INIT(stash);
         HYD_STRING_STASH(stash, MPL_strdup("cmd=get_result rc=0 msg=success value="), status);
@@ -409,6 +418,7 @@ static HYD_status fn_get(int fd, char *args[])
         MPL_free(cmd);
     } else {
         HASH_FIND_STR(hash_get, key, found);
+        //printf("FN_GET %s %s %s %s\n", key, found->val, hash_get->key, hash_get->val);
         if (found) {
             HYD_STRING_STASH_INIT(stash);
             HYD_STRING_STASH(stash, MPL_strdup("cmd=get_result rc="), status);
@@ -473,6 +483,7 @@ static HYD_status fn_put(int fd, char *args[])
     if (cache_put.keyval_len >= CACHE_PUT_KEYVAL_MAXLEN)
         cache_put_flush(fd);
 
+    //printf("FN_PUT %s %s %s\n", cmd, key, val);
     status = send_cmd_downstream(fd, "cmd=put_result rc=0 msg=success\n");
     HYDU_ERR_POP(status, "error sending PMI response\n");
 
@@ -504,6 +515,7 @@ static HYD_status fn_keyval_cache(int fd, char *args[])
     for (i = 0; i < num_elems; i++) {
         struct cache_elem *elem = cache_get + i;
         HASH_ADD_STR(hash_get, key, elem, MPL_MEM_PM);
+        //printf("CC %d %s %s\n", i, elem->key, elem->val);
     }
     for (; i < num_elems + token_count; i++) {
         struct cache_elem *elem = cache_get + i;
@@ -512,6 +524,7 @@ static HYD_status fn_keyval_cache(int fd, char *args[])
         elem->val = MPL_strdup(tokens[i - num_elems].val);
         HYDU_ERR_CHKANDJUMP(status, NULL == elem->val, HYD_INTERNAL_ERROR, "%s", "");
         HASH_ADD_STR(hash_get, key, elem, MPL_MEM_PM);
+        //printf("CC %d %s %s\n", i, elem->key, elem->val);
     }
     num_elems += token_count;
 

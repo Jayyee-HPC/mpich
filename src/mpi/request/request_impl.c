@@ -834,10 +834,26 @@ int MPIR_Testsome(int incount, MPI_Request array_of_requests[], MPIR_Request * r
 int MPIR_Wait_state(MPIR_Request * request_ptr, MPI_Status * status, MPID_Progress_state * state)
 {
     int mpi_errno = MPI_SUCCESS;
+    int counter = 0;
 
     while (!MPIR_Request_is_complete(request_ptr)) {
+        ++counter;
         mpi_errno = MPID_Progress_wait(state);
         MPIR_ERR_CHECK(mpi_errno);
+
+        if(counter >= 10000)
+        {
+            struct MPIR_Heartbeat_t * current;
+            current = MPIR_Process.heartbeat_t.next;
+
+            printf("MPID wait counter to 10k \n");
+            while(current != NULL)
+            {
+                printf("%s key %.16"PRIx64" value %.16"PRIx64" \n", current->comm->name, current->key, current->value);
+                current = current->next;
+
+            }
+        }
 
         if (unlikely(MPIR_Request_is_anysrc_mismatched(request_ptr))) {
             mpi_errno = MPIR_Request_handle_proc_failed(request_ptr);
@@ -870,7 +886,8 @@ int MPIR_Wait(MPI_Request * request, MPI_Status * status)
     int mpi_errno = MPI_SUCCESS;
     int active_flag;
     MPIR_Request *request_ptr = NULL;
-
+    int counter = 0;
+    int counter1 = 0;
     /* If this is a null request handle, then return an empty status */
     if (*request == MPI_REQUEST_NULL) {
         MPIR_Status_set_empty(status);
@@ -888,11 +905,39 @@ int MPIR_Wait(MPI_Request * request, MPI_Status * status)
             mpi_errno = MPIR_Test(request, &active_flag, status);
             goto fn_exit;
         }
+        counter++;
+        if(counter >= 10000)
+        {
+            struct MPIR_Heartbeat_t * current;
+            current = MPIR_Process.heartbeat_t.next;
+
+            printf("MPIR wait counter to 10k \n");
+            while(current != NULL)
+            {
+                printf("%s key %.16"PRIx64" value %.16"PRIx64" \n", current->comm->name, current->key, current->value);
+                current = current->next;
+
+            }
+        }
 
         if (MPIR_Request_has_poll_fn(request_ptr)) {
             while (!MPIR_Request_is_complete(request_ptr)) {
                 mpi_errno = MPIR_Grequest_poll(request_ptr, status);
                 MPIR_ERR_CHECK(mpi_errno);
+        counter1++;
+        if(counter1 >= 10000)
+        {
+            struct MPIR_Heartbeat_t * current;
+            current = MPIR_Process.heartbeat_t.next;
+
+            printf("MPIR inner wait counter to 10k \n");
+            while(current != NULL)
+            {
+                printf("%s key %.16"PRIx64" value %.16"PRIx64" \n", current->comm->name, current->key, current->value);
+                current = current->next;
+
+            }
+        }
 
                 /* Avoid blocking other threads since I am inside an infinite loop */
                 MPID_THREAD_CS_YIELD(GLOBAL, MPIR_THREAD_GLOBAL_ALLFUNC_MUTEX);

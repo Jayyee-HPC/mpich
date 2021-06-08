@@ -299,7 +299,7 @@ MPL_STATIC_INLINE_PREFIX int MPID_Progress_poke(void)
 MPL_STATIC_INLINE_PREFIX int MPID_Progress_wait(MPID_Progress_state * state)
 {
     int mpi_errno = MPI_SUCCESS;
-
+    int counter = 0;
     MPIR_FUNC_VERBOSE_STATE_DECL(MPID_STATE_MPID_PROGRESS_WAIT);
     MPIR_FUNC_VERBOSE_ENTER(MPID_STATE_MPID_PROGRESS_WAIT);
 
@@ -311,6 +311,21 @@ MPL_STATIC_INLINE_PREFIX int MPID_Progress_wait(MPID_Progress_state * state)
 #else
     state->progress_made = 0;
     while (1) {
+        ++counter;
+        printf("%d\n", counter);
+        if(counter >= 10000)
+        {
+            struct MPIR_Heartbeat_t * current;
+            current = MPIR_Process.heartbeat_t.next;
+
+            printf("CH4 progress wait counter to 10k \n");
+            while(current != NULL)
+            {
+                printf("%s key %.16"PRIx64" value %.16"PRIx64" \n", current->comm->name, current->key, current->value);
+                current = current->next;
+
+            }
+        }
         mpi_errno = MPIDI_progress_test(state, 1);
         MPIR_ERR_CHECK(mpi_errno);
         if (state->progress_made) {

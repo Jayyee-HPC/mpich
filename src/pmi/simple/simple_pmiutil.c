@@ -173,6 +173,7 @@ int PMIU_writeline(int fd, char *buf)
     ssize_t size, n;
 
     size = strlen(buf);
+
     if (size > PMIU_MAXLINE) {
         buf[PMIU_MAXLINE - 1] = '\0';
         PMIU_printf(1, "write_line: message string too big: :%s:\n", buf);
@@ -191,6 +192,11 @@ int PMIU_writeline(int fd, char *buf)
         if (n < size)
             PMIU_printf(1, "write_line failed to write entire message\n");
     }
+
+    //char tempbuf[size+1];
+    //PMIU_readline(fd, tempbuf, size+1);
+    //printf("write %s   %s\n",buf, tempbuf);
+
     return PMI_SUCCESS;
 }
 
@@ -207,6 +213,7 @@ int PMIU_parse_keyvals(char *st)
         return PMI_FAIL;
 
     PMIU_keyval_tab_idx = 0;
+    //printf("%s %s\n", st, PMIU_keyval_tab[PMIU_keyval_tab_idx].value);
     p = st;
     while (1) {
         while (*p == ' ')
@@ -238,11 +245,13 @@ int PMIU_parse_keyvals(char *st)
             p++;
         /* store value */
         MPL_strncpy(PMIU_keyval_tab[PMIU_keyval_tab_idx].value, valstart, MAXVALLEN);
+                
         offset = (int) (p - valstart);
         /* When compiled with -fPIC, the pgcc compiler generates incorrect
          * code if "p - valstart" is used instead of using the
          * intermediate offset */
         PMIU_keyval_tab[PMIU_keyval_tab_idx].value[offset] = '\0';
+        //printf("%s\n", PMIU_keyval_tab[PMIU_keyval_tab_idx].value);
         PMIU_keyval_tab_idx++;
         if (*p == ' ')
             continue;

@@ -214,6 +214,7 @@ int MPII_Comm_init(MPIR_Comm * comm_p)
     comm_p->topo_fns = NULL;
     comm_p->name[0] = '\0';
     comm_p->seq = 0;    /* default to 0, to be updated at Comm_commit */
+    comm_p->hb_counter = 0; /* default to 0, to be updated at hb service */
     comm_p->tainted = 0;
     memset(comm_p->hints, 0, sizeof(comm_p->hints));
 
