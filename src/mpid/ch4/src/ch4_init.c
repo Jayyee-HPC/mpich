@@ -363,6 +363,11 @@ int MPID_Init(int requested, int *provided)
 
     MPIDI_global.is_initialized = 0;
 
+    MPIR_Process.heartbeat_t.key = 0;
+    MPIR_Process.heartbeat_t.value = 0;
+    MPIR_Process.heartbeat_t.comm = NULL;
+    MPIR_Process.heartbeat_t.next = NULL;
+
     switch (requested) {
         case MPI_THREAD_SINGLE:
         case MPI_THREAD_SERIALIZED:

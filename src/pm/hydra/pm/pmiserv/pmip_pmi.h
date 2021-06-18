@@ -22,4 +22,6 @@ struct HYD_pmcd_pmip_pmi_handle {
 
 extern struct HYD_pmcd_pmip_pmi_handle *HYD_pmcd_pmip_pmi_handle;
 
+void HYD_cache_flush_temp(int fd);
+
 #endif /* PMIP_PMI_H_INCLUDED */

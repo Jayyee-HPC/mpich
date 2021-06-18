@@ -251,6 +251,9 @@ int MPII_Comm_init(MPIR_Comm * comm_p)
     comm_p->mapper_head = NULL;
     comm_p->mapper_tail = NULL;
 
+    /* Init heartbeat counter as 0 */
+    comm_p->hb_counter = 0;
+    
     /* mutex is only used in POBJ or VCI granularity. But the overhead of
      * creation is low, so we always create it. */
     {

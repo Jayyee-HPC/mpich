@@ -425,6 +425,18 @@ int PMI_KVS_Commit(const char kvsname[]ATTRIBUTE((unused)))
     return PMI_SUCCESS;
 }
 
+int PMI_KVS_Heartbeat(void)
+{
+    char buf[PMIU_MAXLINE];
+    int rc;
+
+    rc = MPL_snprintf(buf, PMIU_MAXLINE,
+                      "cmd=heartbeat size=%d \n", 1);
+    /* no-op in this implementation */
+    GetResponse(buf, "hb_result", 0);
+    return PMI_SUCCESS;
+}
+
 /*FIXME: need to return an error if the value returned is truncated
   because it is larger than length */
 int PMI_KVS_Get(const char kvsname[], const char key[], char value[], int length)
@@ -815,25 +827,31 @@ static int GetResponse(const char request[], const char expectedCmd[], int check
     if (err) {
         return err;
     }
+
+//    printf("RE 1\n");
     n = PMIU_readline(PMI_fd, recvbuf, sizeof(recvbuf));
     if (n <= 0) {
         PMIU_printf(1, "readline failed\n");
         return PMI_FAIL;
     }
+//printf("RE 2\n");
     err = PMIU_parse_keyvals(recvbuf);
     if (err) {
         PMIU_printf(1, "parse_kevals failed %d\n", err);
         return err;
     }
+//printf("RE 3\n");
     p = PMIU_getval("cmd", cmdName, sizeof(cmdName));
     if (!p) {
         PMIU_printf(1, "getval cmd failed\n");
         return PMI_FAIL;
     }
+//printf("RE 4\n");
     if (strcmp(expectedCmd, cmdName) != 0) {
         PMIU_printf(1, "expecting cmd=%s, got %s\n", expectedCmd, cmdName);
         return PMI_FAIL;
     }
+//printf("RE 5\n");
     if (checkRc) {
         p = PMIU_getval("rc", cmdName, PMIU_MAXLINE);
         if (p && strcmp(cmdName, "0") != 0) {

@@ -80,6 +80,7 @@ static int fPMI_Handle_init_port(PMIProcess *);
 static int fPMI_Handle_spawn(PMIProcess *);
 static int fPMI_Handle_get_universe_size(PMIProcess *);
 static int fPMI_Handle_get_appnum(PMIProcess *);
+static int fPMI_Handle_heartbeat(PMIProcess *);
 
 static PMIKVSpace *fPMIKVSAllocate(void);
 
@@ -114,6 +115,7 @@ static PMICmdMap pmiCommands[] = {
     {"spawn", fPMI_Handle_spawn},
     {"get_universe_size", fPMI_Handle_get_universe_size},
     {"get_appnum", fPMI_Handle_get_appnum},
+    {"heartbeat", fPMI_Handle_heartbeat},
     {"\0", 0},  /* Sentinel for end of list */
 };
 
@@ -764,6 +766,17 @@ static int fPMI_Handle_get_universe_size(PMIProcess * pentry)
     char outbuf[PMIU_MAXLINE];
     /* Import the universe size from the process structures */
     MPL_snprintf(outbuf, PMIU_MAXLINE, "cmd=universe_size size=%d\n", pUniv.size);
+    PMIWriteLine(pentry->fd, outbuf);
+    DBG_PRINTFCOND(pmidebug, ("%s", outbuf));
+    return 0;
+}
+
+/* Handle an incoming heartbeat command */
+static int fPMI_Handle_heartbeat(PMIProcess * pentry)
+{
+    char outbuf[PMIU_MAXLINE];
+    /* Import the universe size from the process structures */
+    MPL_snprintf(outbuf, PMIU_MAXLINE, "cmd=heartbeat size=%d\n", pUniv.size);
     PMIWriteLine(pentry->fd, outbuf);
     DBG_PRINTFCOND(pmidebug, ("%s", outbuf));
     return 0;

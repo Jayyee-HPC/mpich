@@ -131,12 +131,27 @@ HYD_status HYD_pmci_wait_for_completion(int timeout)
 
     gettimeofday(&start, NULL);
 
+    MPL_time_t time_start, time_now;
+    double time_gap = 0.0;
+    MPL_wtime(&time_start);
+
     /* We first wait for the exit statuses to arrive till the timeout
      * period */
     for (pg = &HYD_server_info.pg_list; pg; pg = pg->next) {
         pg_scratch = (struct HYD_pmcd_pmi_pg_scratch *) pg->pg_scratch;
 
         while (pg_scratch->control_listen_fd != HYD_FD_CLOSED) {
+
+            printf("HYD_pmci_wait.\n");
+            MPL_wtime(&time_now);
+            MPL_wtime_diff(&time_start, &time_now, &time_gap);
+            if (time_gap > 1.0)
+            {
+                time_gap = 0.0;
+                MPL_wtime(&time_start);
+                printf("HYD_pmci_wait for 1 second.\n");
+            } 
+
             gettimeofday(&now, NULL);
             time_elapsed = (now.tv_sec - start.tv_sec);
             time_left = timeout;

@@ -59,6 +59,7 @@ D*/
 
 /* PMI Group functions */
 
+int PMI_KVS_Heartbeat(void);
 /*@
 PMI_Init - initialize the Process Manager Interface
 

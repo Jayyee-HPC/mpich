@@ -503,15 +503,19 @@ static HYD_status fn_keyval_cache(int fd, char *args[])
                          (sizeof(struct cache_elem) * (num_elems + token_count)), status);
     for (i = 0; i < num_elems; i++) {
         struct cache_elem *elem = cache_get + i;
-        HASH_ADD_STR(hash_get, key, elem, MPL_MEM_PM);
+        struct cache_elem *replaced = NULL;
+        HASH_REPLACE_STR(hash_get, key, elem, replaced, MPL_MEM_PM);
+        //HASH_ADD_STR(hash_get, key, elem, MPL_MEM_PM);
     }
     for (; i < num_elems + token_count; i++) {
         struct cache_elem *elem = cache_get + i;
+        struct cache_elem *replaced = NULL;
         elem->key = MPL_strdup(tokens[i - num_elems].key);
         HYDU_ERR_CHKANDJUMP(status, NULL == elem->key, HYD_INTERNAL_ERROR, "%s", "");
         elem->val = MPL_strdup(tokens[i - num_elems].val);
         HYDU_ERR_CHKANDJUMP(status, NULL == elem->val, HYD_INTERNAL_ERROR, "%s", "");
-        HASH_ADD_STR(hash_get, key, elem, MPL_MEM_PM);
+        //HASH_ADD_STR(hash_get, key, elem, MPL_MEM_PM);
+        HASH_REPLACE_STR(hash_get, key, elem, replaced, MPL_MEM_PM);
     }
     num_elems += token_count;
 
@@ -630,3 +634,8 @@ static struct HYD_pmcd_pmip_pmi_handle pmi_v1_handle_fns_foo[] = {
 };
 
 struct HYD_pmcd_pmip_pmi_handle *HYD_pmcd_pmip_pmi_v1 = pmi_v1_handle_fns_foo;
+
+void HYD_cache_flush_temp(int fd)
+{
+  HYD_status cache_put_flush(int fd);
+}

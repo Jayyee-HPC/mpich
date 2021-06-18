@@ -299,6 +299,8 @@ MPL_STATIC_INLINE_PREFIX int MPID_Progress_poke(void)
 MPL_STATIC_INLINE_PREFIX int MPID_Progress_wait(MPID_Progress_state * state)
 {
     int mpi_errno = MPI_SUCCESS;
+    MPL_time_t time_start, time_now;
+    double time_gap = 0.0;
 
     MPIR_FUNC_VERBOSE_STATE_DECL(MPID_STATE_MPID_PROGRESS_WAIT);
     MPIR_FUNC_VERBOSE_ENTER(MPID_STATE_MPID_PROGRESS_WAIT);
@@ -310,11 +312,23 @@ MPL_STATIC_INLINE_PREFIX int MPID_Progress_wait(MPID_Progress_state * state)
 
 #else
     state->progress_made = 0;
+    MPL_wtime(&time_start);
     while (1) {
         mpi_errno = MPIDI_progress_test(state, 1);
         MPIR_ERR_CHECK(mpi_errno);
         if (state->progress_made) {
             break;
+        }
+
+        MPL_wtime(&time_now);
+        MPL_wtime_diff(&time_start, &time_now, &time_gap);
+        if (time_gap > 1.0)
+        {
+            time_gap = 0.0;
+            MPL_wtime(&time_start);
+            printf("CH4 wait for 1 second.\n");
+            PMI_KVS_Heartbeat();
+            //MPIR_Coll_heartbeat_server();
         }
         MPIDI_PROGRESS_YIELD();
     }

@@ -6,6 +6,41 @@
 #ifndef MPIR_PROCESS_H_INCLUDED
 #define MPIR_PROCESS_H_INCLUDED
 
+/* functions for heartbeat error checking */
+#ifndef MAXVALLEN
+#define MAXVALLEN 1024
+#endif
+
+#ifndef MAXKEYLEN
+#define MAXKEYLEN 32
+#endif
+
+#ifndef KVSNAMELEN
+#define KVSNAMELEN 256
+#endif
+/* Coll heartbeat sturct */
+typedef struct coll_hb_info
+{
+    char kvsname[KVSNAMELEN];
+    char key[MAXKEYLEN];
+    char value[MAXVALLEN];
+    char op_name[MAXKEYLEN];
+    uint64_t key_uint64;
+    uint64_t value_uint64;
+} coll_hb_info;
+
+int MPIR_Coll_heartbeat_put(coll_hb_info * op_info, MPIR_Comm * comm_ptr);
+int MPIR_Coll_heartbeat_get( coll_hb_info * op_info, char key[], char value[], int * bufsize);
+int MPIR_Coll_heartbeat_t_remove(coll_hb_info * op_info, MPIR_Comm * comm_ptr);
+int MPIR_Coll_heartbeat_server(void);
+
+struct MPIR_Heartbeat_t {
+    uint64_t key;
+    uint64_t value;
+    MPIR_Comm *comm;
+    struct MPIR_Heartbeat_t *next;                /* form a linked list */
+}MPIR_Heartbeat_t;
+
 /* Per process data */
 typedef struct PreDefined_attrs {
     int appnum;                 /* Application number provided by mpiexec (MPI-2) */
@@ -78,6 +113,8 @@ typedef struct MPIR_Process_t {
      * to specify the kind (comm,file,win) */
     void (*cxx_call_errfn) (int, int *, int *, void (*)(void));
 #endif                          /* HAVE_CXX_BINDING */
+
+    struct MPIR_Heartbeat_t heartbeat_t; /* Only used in CH4 and init in MPID_Init() */
 } MPIR_Process_t;
 extern MPIR_Process_t MPIR_Process;
 

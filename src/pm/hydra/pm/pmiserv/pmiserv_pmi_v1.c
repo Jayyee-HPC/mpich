@@ -788,6 +788,49 @@ static HYD_status fn_abort(int fd, int pid, int pgid, char *args[])
     goto fn_exit;
 }
 
+static HYD_status fn_heartbeat(int fd, int pid, int pgid, char *args[])
+{
+    struct HYD_string_stash stash;
+    int keyval_count, arg_count, i, j;
+    char **tmp = NULL, *cmd;
+    struct HYD_pmcd_pmi_kvs_pair *run;
+    struct HYD_proxy *proxy, *tproxy;
+    struct HYD_pmcd_pmi_pg_scratch *pg_scratch;
+    HYD_status status = HYD_SUCCESS;
+
+    HYDU_FUNC_ENTER();
+
+    proxy = HYD_pmcd_pmi_find_proxy(fd);
+    HYDU_ASSERT(proxy, status);
+    pg_scratch = (struct HYD_pmcd_pmi_pg_scratch *) proxy->pg->pg_scratch;
+
+    /* find the number of keyvals */
+    keyval_count = 0;
+    for (run = pg_scratch->kvs->key_pair; run; run = run->next)
+    {
+        printf("HB %d %s %s %s\n", keyval_count, pg_scratch->kvs->kvsname, run->key, run->val);
+        keyval_count++;
+    }
+
+    keyval_count -= pg_scratch->keyval_dist_count;
+
+    HYD_STRING_STASH_INIT(stash);
+    HYD_STRING_STASH(stash, MPL_strdup("cmd=hb_result"), status);
+    HYD_STRING_STASH(stash, MPL_strdup(" rc=1 msg=service_not_found\n"), status);
+
+    HYD_STRING_SPIT(stash, cmd, status);
+
+    status = cmd_response(fd, pid, cmd);
+
+  fn_exit:
+    if (tmp)
+        MPL_free(tmp);
+    HYDU_FUNC_EXIT();
+    return status;
+
+  fn_fail:
+    goto fn_exit;
+}
 
 /* TODO: abort, create_kvs, destroy_kvs, getbyidx */
 static struct HYD_pmcd_pmi_handle pmi_v1_handle_fns_foo[] = {
@@ -799,6 +842,7 @@ static struct HYD_pmcd_pmi_handle pmi_v1_handle_fns_foo[] = {
     {"unpublish_name", fn_unpublish_name},
     {"lookup_name", fn_lookup_name},
     {"abort", fn_abort},
+    {"heartbeat", fn_heartbeat},
     {"\0", NULL}
 };
 

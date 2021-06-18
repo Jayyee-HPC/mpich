@@ -231,6 +231,8 @@ struct MPIR_Comm {
 #ifdef MPID_DEV_COMM_DECL
      MPID_DEV_COMM_DECL
 #endif
+
+    uint64_t hb_counter;
 };
 extern MPIR_Object_alloc_t MPIR_Comm_mem;
 
